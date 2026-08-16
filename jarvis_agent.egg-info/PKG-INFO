@@ -1,0 +1,109 @@
+Metadata-Version: 2.4
+Name: jarvis-agent
+Version: 0.1.0
+Summary: JARVIS - Personal AI Agent Platform
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: langchain-core>=0.3.0
+Requires-Dist: langgraph>=0.2.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+
+# JARVIS — Personal AI Agent Platform
+
+> **Project Status:** Phase 0 — Foundation  
+> **Version:** 0.1.0  
+> **Primary Language:** Python (>= 3.10)  
+> **Orchestration Runtime:** LangGraph (Planned)  
+> **Protocol Standard:** MCP (Tools) & A2A (Agent Interoperability)
+
+---
+
+## 1. Overview
+
+**JARVIS** 是一個以個人使用為核心的 Personal AI Agent 平台。
+
+JARVIS 不僅僅是一個對話機器人，而是具備長期記憶、任務規劃、工具調用（Model Context Protocol）以及多代理人協作（Agent2Agent Protocol）能力的個人 AI 助理。
+
+本專案的核心目標是：**在建構現代 AI Agent 系統的同時，透過可解釋的漸進式開發，讓開發者深刻理解每一行程式碼與背後架構原理。**
+
+---
+
+## 2. Core Philosophy (核心開發哲學)
+
+1. **The developer must understand the code**（理解優先於單純跑通）：所有重要程式碼修改皆附帶新手友善的白話文解釋與架構說明。
+2. **Protocol First**：外部能力與代理人溝通優先採用開放標準協定（MCP / A2A）。
+3. **Incremental Development**：專案按 Phase 階段式推進，不提前引入未到期之複雜架構。
+4. **Security & Permission**：任何外部操作皆設有明確權限邊界，機密資訊（API Keys）絕不提交。
+
+---
+
+## 3. Project Structure (專案目錄結構)
+
+```text
+c:\e.v
+├── .gitignore               # Git 忽略檔案清單（快取、私鑰、虛擬環境等）
+├── AGENTS.md                # AI 開發指引與專案核心守則
+├── README.md                # 專案介紹與使用說明
+├── pyproject.toml           # Python 專案元數據與 pytest 設定
+├── app/                     # JARVIS 應用主程式模組
+│   └── __init__.py
+├── config/                  # 設定管理模組（環境變數、Settings）
+├── docs/                    # 專案文件與架構規格
+│   ├── PROJECT_SPEC.md      # 專案總體規格書
+│   ├── architecture/        # 架構與協定版本紀錄
+│   │   └── protocol-versions.md
+│   └── development-log/     # 每次修改之開發日誌
+├── tests/                   # 自動化測試套件
+│   ├── __init__.py
+│   └── test_smoke.py        # 啟動與環境冒煙測試
+├── a2a/                     # A2A 協定模組（未來階段）
+├── mcp/                     # MCP 協定模組（未來階段）
+├── memory/                  # 記憶管理模組（未來階段）
+└── services/                # 外部服務整合模組（未來階段）
+```
+
+---
+
+## 4. Quickstart & Testing (快速開始與測試)
+
+### 環境需求
+* Python >= 3.10
+
+### 執行測試 (Smoke Test)
+本專案使用 `pytest` 作為測試執行器：
+
+```powershell
+python -m pytest
+```
+
+---
+
+## 5. Phase Roadmap (開發路線圖)
+
+- [x] **Phase 0: Foundation** (進行中)
+  - [x] P0-01: 專案基礎骨幹與 Startup Smoke Test
+  - [x] P0-02/P0-03: 專案設定檔 (`pyproject.toml`)、`README.md` 與 pytest 配置
+  - [ ] P0-04: 環境變數與 Settings 管理
+  - [ ] P0-05 ~ P0-08: 基礎模型連線、狀態定義與驗證
+- [ ] **Phase 1: Basic LangGraph Agent**
+- [ ] **Phase 2: Own MCP Server**
+- [ ] **Phase 3: Third-party MCP Integration**
+- [ ] **Phase 4: Calendar Integration**
+- [ ] **Phase 5: Memory**
+- [ ] **Phase 6: A2A (Agent2Agent)**
+- [ ] **Phase 7: Multi-Agent Orchestration**
+- [ ] **Phase 8: JARVIS User Interface**
+- [ ] **Phase 9: Observability & Evaluation**
+- [ ] **Phase 10: Production Hardening**
+
+---
+
+## 6. Documentation (延伸文件)
+
+* 總體規格書：[docs/PROJECT_SPEC.md](file:///c:/e.v/docs/PROJECT_SPEC.md)
+* 開發規則守則：[AGENTS.md](file:///c:/e.v/AGENTS.md)
+* 協定與 SDK 版本：[docs/architecture/protocol-versions.md](file:///c:/e.v/docs/architecture/protocol-versions.md)
+* 開發日誌紀錄：[docs/development-log/](file:///c:/e.v/docs/development-log/)
