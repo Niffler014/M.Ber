@@ -19,10 +19,19 @@
 
 from typing import Any, Callable, Dict, List, Optional, Union
 import json
+import re
+from datetime import datetime, timedelta
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from app.agent.state import AgentState
 from app.mcp.client import MCPStdioClient
 from app.mcp.manager import MCPManager
+
+
+def get_system_context() -> str:
+    """動態取得當前系統時間與時區資訊，注入給 LLM 建立時間座標 (Time Anchor)."""
+    now = datetime.now()
+    tz_name = "Asia/Taipei (UTC+8)"
+    return f"【系統環境資訊】：當前時間為 {now.strftime('%Y-%m-%d %H:%M:%S')}，時區為 {tz_name}。"
 
 
 def dummy_tool(tool_name: str, args: Dict[str, Any]) -> str:
@@ -38,7 +47,6 @@ def dummy_tool(tool_name: str, args: Dict[str, Any]) -> str:
         except Exception as e:
             return f"[Calculator Error]: 計算失敗 ({e})"
     elif tool_name in ["get_current_time", "get_system_time"]:
-        from datetime import datetime
         return f"[System Time]: 現在時間為 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     elif tool_name == "read_notes":
         keyword = args.get("keyword", "")
@@ -47,13 +55,19 @@ def dummy_tool(tool_name: str, args: Dict[str, Any]) -> str:
         title = args.get("title", "未命名")
         content = args.get("content", "")
         return f"[Fallback Notes]: 模擬新增筆記 《{title}》: {content}"
+    elif tool_name == "query_events":
+        return f"[Fallback Calendar]: 模擬查詢行程"
+    elif tool_name == "add_event":
+        return f"[Fallback Calendar]: 模擬新增行程"
+    elif tool_name == "delete_event":
+        return f"[Fallback Calendar]: 模擬刪除行程"
     else:
         query = args.get("query") or args.get("message") or args.get("input") or str(args)
         return f"[Fallback Echo]: 收到工具請求 '{tool_name}'，參數為: {query}"
 
 
 def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[str, List[BaseMessage]]]:
-    """建立 Agent 思考節點.
+    """建立 Agent 思考節點 (支援時間/時區注入與 MCP 工具意圖決策).
 
     支援注入真實 LLM 或使用內建模擬器（分析使用者訊息發起 MCP 工具調用）。
     """
@@ -85,9 +99,124 @@ def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[
 
         user_text = last_msg.content if isinstance(last_msg.content, str) else str(last_msg.content)
         user_text_lower = user_text.lower()
+        now = datetime.now()
 
-        # 檢查是否觸發新增筆記 (add_note)
-        if "新增筆記" in user_text or "記一下" in user_text or "記錄筆記" in user_text:
+        # ==========================================
+        # 1. 檢查是否觸發行事曆新增行程 (add_event)
+        # ==========================================
+        if any(kw in user_text for kw in ["預約", "新增行程", "安排", "開會", "行程：", "提醒我明天", "建立行程"]):
+            # 計算基準日期 (今天、明天、後天)
+            target_date = now
+            if "明天" in user_text:
+                target_date = now + timedelta(days=1)
+            elif "後天" in user_text:
+                target_date = now + timedelta(days=2)
+
+            # 抓取小時 (例如 下午3點, 15點, 9點)
+            hour = 10  # 預設上午 10:00
+            if "下午" in user_text or "晚上" in user_text or "pm" in user_text_lower:
+                match_h = re.search(r'(?:下午|晚上)?\s*(\d{1,2})\s*(?:點|時|:00)?', user_text)
+                if match_h:
+                    h_val = int(match_h.group(1))
+                    hour = h_val + 12 if h_val < 12 else h_val
+            else:
+                match_h = re.search(r'(\d{1,2})\s*(?:點|時)', user_text)
+                if match_h:
+                    hour = int(match_h.group(1))
+
+            start_dt = datetime(target_date.year, target_date.month, target_date.day, hour, 0, 0)
+            end_dt = start_dt + timedelta(hours=1)
+
+            # 擷取行程標題 (優先取 標題= 或 標題：)
+            title = "重要會議"
+            if "標題=" in user_text or "標題:" in user_text or "標題：" in user_text:
+                match_title = re.search(r'標題[=：:]\s*([^，,\n]+)', user_text)
+                if match_title:
+                    title = match_title.group(1).strip()
+            else:
+                match_title = re.search(r'(?:會議|安排|預約)([^，,\n]+)', user_text)
+                if match_title:
+                    title = match_title.group(1).strip()
+            if not title:
+                title = "重要會議"
+
+            return {
+                "messages": [
+                    AIMessage(
+                        content=f"為您推算行程時間：{start_dt.strftime('%Y-%m-%d %H:%M')}，正在調用 Calendar MCP Server 新增行程...",
+                        tool_calls=[
+                            {
+                                "id": "call_mcp_add_event_001",
+                                "name": "add_event",
+                                "args": {
+                                    "title": title,
+                                    "start_time": start_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+                                    "end_time": end_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+                                    "description": f"由 JARVIS 自動排程: {user_text}",
+                                },
+                            }
+                        ],
+                    )
+                ]
+            }
+
+        # ==========================================
+        # 2. 檢查是否觸發行事曆查詢行程 (query_events)
+        # ==========================================
+        elif any(kw in user_text for kw in ["查詢行程", "有哪些行程", "查看行事曆", "我的行程", "明天的行程", "今天的行程"]):
+            target_date = now
+            if "明天" in user_text:
+                target_date = now + timedelta(days=1)
+                start_dt = datetime(target_date.year, target_date.month, target_date.day, 0, 0, 0)
+                end_dt = datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59)
+            elif "今天" in user_text:
+                start_dt = datetime(now.year, now.month, now.day, 0, 0, 0)
+                end_dt = datetime(now.year, now.month, now.day, 23, 59, 59)
+            else:
+                start_dt = datetime(now.year, now.month, now.day, 0, 0, 0)
+                end_dt = start_dt + timedelta(days=7)
+
+            return {
+                "messages": [
+                    AIMessage(
+                        content="正在為您查詢行事曆中的行程清單...",
+                        tool_calls=[
+                            {
+                                "id": "call_mcp_query_events_001",
+                                "name": "query_events",
+                                "args": {
+                                    "start_time": start_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+                                    "end_time": end_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+                                },
+                            }
+                        ],
+                    )
+                ]
+            }
+
+        # ==========================================
+        # 3. 檢查是否觸發行事曆刪除行程 (delete_event)
+        # ==========================================
+        elif "刪除行程" in user_text or "取消行程" in user_text:
+            match_id = re.search(r'(?:id|ID|編號)\s*[：:=]?\s*(\d+)', user_text)
+            event_id = int(match_id.group(1)) if match_id else 1
+            return {
+                "messages": [
+                    AIMessage(
+                        content=f"正在為您執行刪除行程 [ID: {event_id}] 操作...",
+                        tool_calls=[
+                            {
+                                "id": "call_mcp_delete_event_001",
+                                "name": "delete_event",
+                                "args": {"event_id": event_id},
+                            }
+                        ],
+                    )
+                ]
+            }
+
+        # 4. 檢查是否觸發新增筆記 (add_note)
+        elif "新增筆記" in user_text or "記一下" in user_text or "記錄筆記" in user_text:
             # 簡易擷取標題與內容
             parts = user_text.replace("新增筆記", "").replace("記一下", "").replace("記錄筆記", "").strip("：: ")
             if "內容" in parts:
@@ -113,7 +242,7 @@ def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[
                 ]
             }
 
-        # 檢查是否觸發查詢筆記 (read_notes)
+        # 5. 檢查是否觸發查詢筆記 (read_notes)
         elif "查詢筆記" in user_text or "讀取筆記" in user_text or "查看筆記" in user_text or "列出筆記" in user_text or "筆記" in user_text:
             keyword = user_text.replace("查詢筆記", "").replace("讀取筆記", "").replace("查看筆記", "").replace("列出筆記", "").replace("筆記", "").strip("：: ")
             return {
@@ -131,7 +260,7 @@ def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[
                 ]
             }
 
-        # 檢查是否觸發 MCP get_current_time 工具
+        # 6. 檢查是否觸發 MCP get_current_time 工具
         elif "時間" in user_text or "幾點" in user_text or "time" in user_text_lower:
             return {
                 "messages": [
@@ -148,7 +277,7 @@ def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[
                 ]
             }
 
-        # 檢查是否觸發 MCP echo_message 工具
+        # 7. 檢查是否觸發 MCP echo_message 工具
         elif "echo" in user_text_lower or "回傳" in user_text:
             msg_to_echo = user_text
             for prefix in ["echo", "回傳"]:
@@ -170,9 +299,8 @@ def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[
                 ]
             }
 
-        # 檢查是否觸發計算機工具
+        # 8. 檢查是否觸發計算機工具
         elif "計算" in user_text or "算一下" in user_text or "calculate" in user_text_lower:
-            import re
             match = re.search(r"[\d\+\-\*\/\(\)\. ]{3,}", user_text)
             expr = match.group(0).strip() if match else "1 + 1"
             return {
@@ -190,11 +318,12 @@ def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[
                 ]
             }
 
-        # 一般對話回覆
+        # 一般對話回覆 (附帶系統時間座標)
+        system_time_ctx = get_system_context()
         return {
             "messages": [
                 AIMessage(
-                    content=f"JARVIS 收到您的訊息：『{user_text}』。這是一個直接回覆，不需要調用外部工具。"
+                    content=f"JARVIS 收到您的訊息：『{user_text}』。\n{system_time_ctx}\n我有行事曆行程管理、筆記資料庫、時間查詢等功能，請問需要為您做什麼？"
                 )
             ]
         }

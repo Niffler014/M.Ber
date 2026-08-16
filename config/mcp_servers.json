@@ -2,15 +2,30 @@
   "mcpServers": {
     "own_server": {
       "command": "python",
-      "args": ["mcp_server/my_mcp_server.py"],
+      "args": ["-m", "mcp_server.my_mcp_server"],
+      "env": {
+        "PYTHONPATH": "."
+      },
       "enabled": true,
-      "description": "JARVIS 自有基礎工具伺服器 (包含時間查詢與訊息回傳)"
+      "description": "JARVIS 自有 MCP 伺服器 (包含時間查詢與回音工具)"
     },
     "sqlite_server": {
       "command": "python",
-      "args": ["mcp_server/third_party/sqlite_server.py"],
+      "args": ["-m", "mcp_server.third_party.sqlite_server"],
+      "env": {
+        "PYTHONPATH": "."
+      },
       "enabled": true,
-      "description": "第三方風格 SQLite 本地筆記與資料庫伺服器 (包含筆記讀取與新增)"
+      "description": "第三方 SQLite 筆記與資料查詢 MCP 伺服器"
+    },
+    "calendar_server": {
+      "command": "python",
+      "args": ["-m", "mcp_server.third_party.calendar_server"],
+      "env": {
+        "PYTHONPATH": "."
+      },
+      "enabled": true,
+      "description": "JARVIS 行事曆與行程管理 MCP 伺服器 (Calendar Events CRUD)"
     }
   }
 }

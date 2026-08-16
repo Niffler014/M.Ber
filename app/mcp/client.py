@@ -28,21 +28,47 @@ class MCPStdioClient:
     支援工具探索與同步/非同步工具呼叫。
     """
 
-    def __init__(self, server_script_path: Optional[str] = None):
+    def __init__(
+        self,
+        server_script_path: Optional[str] = None,
+        command: Optional[str] = None,
+        args: Optional[List[str]] = None,
+        env: Optional[Dict[str, str]] = None,
+    ):
         """初始化 MCP Client.
 
         Args:
-            server_script_path: MCP Server Python 檔案路徑（預設自動指向 mcp_server/my_mcp_server.py）
+            server_script_path: MCP Server Python 檔案路徑（可選）
+            command: 執行指令（可選，預設為當前 Python 直譯器）
+            args: 命令列參數清單（可選）
+            env: 環境變數字典（可選）
         """
-        if server_script_path is None:
-            project_root = Path(__file__).resolve().parent.parent.parent
-            server_script_path = str(project_root / "mcp_server" / "my_mcp_server.py")
+        project_root = Path(__file__).resolve().parent.parent.parent
+        run_cmd = command or sys.executable
+
+        if args is not None:
+            run_args = list(args)
+        elif server_script_path is not None:
+            run_args = [server_script_path]
+        else:
+            default_script = str(project_root / "mcp_server" / "my_mcp_server.py")
+            run_args = [default_script]
+
+        run_env = dict(os.environ)
+        if env:
+            run_env.update(env)
+
+        # 確保專案根目錄在 PYTHONPATH
+        if "PYTHONPATH" not in run_env:
+            run_env["PYTHONPATH"] = str(project_root)
+        else:
+            run_env["PYTHONPATH"] = f"{project_root}{os.pathsep}{run_env['PYTHONPATH']}"
 
         self.server_script_path = server_script_path
         self._server_params = StdioServerParameters(
-            command=sys.executable,
-            args=[self.server_script_path],
-            env=dict(os.environ),
+            command=run_cmd,
+            args=run_args,
+            env=run_env,
         )
 
     async def list_tools_async(self) -> List[Dict[str, Any]]:
