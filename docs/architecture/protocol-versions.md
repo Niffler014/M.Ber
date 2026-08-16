@@ -10,25 +10,30 @@ The purpose of this document is to prevent AI coding agents from silently implem
 
 ### Current Project Status
 
-Phase 2 (Own MCP Server) implemented and active.
+Phase 4 (Calendar Integration) completed. MCP is actively used across own server and third-party servers via `MCPManager`.
 
 ### Reference
 
 Official specification:
 https://modelcontextprotocol.io/specification/
 
-### Recorded Configuration (Phase 2)
+### Recorded Configuration (Phase 4)
 
 - **MCP Specification Version**: 2024-11-05 (Model Context Protocol Standard)
 - **MCP SDK**: `mcp` (Python official SDK)
 - **SDK Version**: `2.0.0`
 - **Transport**: `stdio` (JSON-RPC 2.0 via sub-process standard I/O streams)
-- **Active Servers**:
-  - `mcp_server/my_mcp_server.py` (`jarvis-own-mcp-server`):
+- **Active Servers (Managed via config/mcp_servers.json & MCPManager)**:
+  - `own_server` (`mcp_server/my_mcp_server.py`):
     - Tools: `get_current_time`, `echo_message`
+  - `sqlite_server` (`mcp_server/third_party/sqlite_server.py`):
+    - Tools: `read_notes`, `add_note`
+  - `calendar_server` (`mcp_server/third_party/calendar_server.py`):
+    - Tools: `query_events`, `add_event`, `update_event`, `delete_event`
 - **Compatibility Notes**:
   - Requires `anyio` for asynchronous standard I/O streams handling.
-  - Avoid naming local project package as `mcp/` to prevent Python namespace shadowing.
+  - Subprocess execution supports cross-platform python invocation with PYTHONPATH configuration.
+  - Local project package uses `mcp_server/` (not `mcp/`) to avoid Python namespace shadowing.
 
 ---
 
@@ -36,7 +41,7 @@ https://modelcontextprotocol.io/specification/
 
 ### Current Project Status
 
-A2A integration has not yet been implemented.
+A2A integration has not yet been implemented (Planned for Phase 6).
 
 ### Current Official Major Version
 
@@ -62,9 +67,9 @@ When A2A implementation begins, record:
 
 ## LangGraph
 
-LangGraph is the planned orchestration runtime.
+### Current Project Status
 
-The current implementation must record the installed package version.
+Active orchestration runtime powering `app/agent/graph.py`, supporting StateGraph, conditional routing, checkpointer state isolation (MemorySaver), and dynamic tool binding.
 
 Reference:
 
@@ -74,9 +79,9 @@ https://docs.langchain.com/oss/python/langgraph/
 
 ## LangChain
 
-LangChain will provide model/tool/agent integrations where appropriate.
+### Current Project Status
 
-The current implementation must record the installed package version.
+Active framework providing core messages (`HumanMessage`, `AIMessage`, `ToolMessage`), schema bindings, and abstraction layers.
 
 Reference:
 

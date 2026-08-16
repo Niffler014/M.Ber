@@ -6,6 +6,8 @@ app/agent/__init__.py
 app/agent/graph.py
 app/agent/nodes.py
 app/agent/state.py
+app/interfaces/__init__.py
+app/interfaces/line_gateway.py
 app/mcp/__init__.py
 app/mcp/client.py
 app/mcp/manager.py
@@ -14,7 +16,15 @@ jarvis_agent.egg-info/SOURCES.txt
 jarvis_agent.egg-info/dependency_links.txt
 jarvis_agent.egg-info/requires.txt
 jarvis_agent.egg-info/top_level.txt
+mcp_server/__init__.py
+mcp_server/my_mcp_server.py
+mcp_server/third_party/__init__.py
+mcp_server/third_party/calendar_server.py
+mcp_server/third_party/sqlite_server.py
 tests/test_agent_graph.py
+tests/test_calendar_integration.py
+tests/test_calendar_server.py
+tests/test_line_gateway.py
 tests/test_mcp_integration.py
 tests/test_mcp_manager.py
 tests/test_mcp_server.py

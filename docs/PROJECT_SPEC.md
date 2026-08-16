@@ -1,7 +1,7 @@
 # JARVIS — Personal AI Agent System
 
-**Project Status:** Phase 0 — Foundation  
-**Specification Version:** 0.1.0  
+**Project Status:** Phase 4 completed → Phase 5 preparation  
+**Specification Version:** 0.5.0  
 **Project Type:** Personal AI Agent / Agentic System  
 **Primary Language:** Python  
 **Primary Orchestration Framework:** LangGraph  

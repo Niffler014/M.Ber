@@ -1,9 +1,9 @@
 # JARVIS — Personal AI Agent Platform
 
-> **Project Status:** Phase 0 — Foundation  
-> **Version:** 0.1.0  
+> **Project Status:** Phase 4 completed → Phase 5 preparation  
+> **Version:** 0.5.0  
 > **Primary Language:** Python (>= 3.10)  
-> **Orchestration Runtime:** LangGraph (Planned)  
+> **Orchestration Runtime:** LangGraph  
 > **Protocol Standard:** MCP (Tools) & A2A (Agent Interoperability)
 
 ---
@@ -30,26 +30,31 @@ JARVIS 不僅僅是一個對話機器人，而是具備長期記憶、任務規�
 ## 3. Project Structure (專案目錄結構)
 
 ```text
-c:\e.v
-├── .gitignore               # Git 忽略檔案清單（快取、私鑰、虛擬環境等）
+.
+├── .env.example             # 環境變數範本（API Keys、LINE Webhook 金鑰等）
+├── .gitignore               # Git 忽略檔案清單（快取、私鑰、虛擬環境、本地 DB 等）
 ├── AGENTS.md                # AI 開發指引與專案核心守則
+├── CHANGELOG_AI.md          # AI 階段性變更與架構說明紀錄
 ├── README.md                # 專案介紹與使用說明
-├── pyproject.toml           # Python 專案元數據與 pytest 設定
+├── pyproject.toml           # Python 專案元數據、依賴套件與 pytest 配置
 ├── app/                     # JARVIS 應用主程式模組
-│   └── __init__.py
-├── config/                  # 設定管理模組（環境變數、Settings）
+│   ├── __init__.py
+│   ├── cli.py               # 終端機即時互動介面
+│   ├── agent/               # LangGraph 狀態圖、節點與路由定義
+│   ├── interfaces/          # 外部通訊轉接站 (LINE Webhook Gateway 等)
+│   └── mcp/                 # MCP 客戶端連線器與多伺服器總管 (MCPManager)
+├── config/                  # 外部 MCP 伺服器配置 (mcp_servers.json)
+├── data/                    # 本地資料庫目錄 (calendar.db 等)
 ├── docs/                    # 專案文件與架構規格
 │   ├── PROJECT_SPEC.md      # 專案總體規格書
-│   ├── architecture/        # 架構與協定版本紀錄
-│   │   └── protocol-versions.md
+│   ├── architecture/        # 架構與協定版本紀錄 (protocol-versions.md)
 │   └── development-log/     # 每次修改之開發日誌
-├── tests/                   # 自動化測試套件
-│   ├── __init__.py
-│   └── test_smoke.py        # 啟動與環境冒煙測試
-├── a2a/                     # A2A 協定模組（未來階段）
-├── mcp/                     # MCP 協定模組（未來階段）
-├── memory/                  # 記憶管理模組（未來階段）
-└── services/                # 外部服務整合模組（未來階段）
+├── mcp_server/              # 本地與第三方風格 MCP 伺服器模組
+│   ├── my_mcp_server.py     # 自有時間與回音伺服器 (Phase 2)
+│   └── third_party/         # SQLite 筆記與行事曆伺服器 (Phase 3, Phase 4)
+├── memory/                  # 記憶管理模組 (Phase 5 預備)
+├── services/                # 外部服務整合模組 (未來階段預備)
+└── tests/                   # 自動化測試套件 (單元與整合測試)
 ```
 
 ---
@@ -58,28 +63,33 @@ c:\e.v
 
 ### 環境需求
 * Python >= 3.10
+* uv (推薦)
 
-### 執行測試 (Smoke Test)
+### 執行全套測試
 本專案使用 `pytest` 作為測試執行器：
 
 ```powershell
-python -m pytest
+uv run --extra dev pytest
+```
+
+### 啟動 CLI 終端機對話
+```powershell
+uv run python -m app.cli
 ```
 
 ---
 
 ## 5. Phase Roadmap (開發路線圖)
 
-- [x] **Phase 0: Foundation** (進行中)
-  - [x] P0-01: 專案基礎骨幹與 Startup Smoke Test
-  - [x] P0-02/P0-03: 專案設定檔 (`pyproject.toml`)、`README.md` 與 pytest 配置
-  - [ ] P0-04: 環境變數與 Settings 管理
-  - [ ] P0-05 ~ P0-08: 基礎模型連線、狀態定義與驗證
-- [ ] **Phase 1: Basic LangGraph Agent**
-- [ ] **Phase 2: Own MCP Server**
-- [ ] **Phase 3: Third-party MCP Integration**
-- [ ] **Phase 4: Calendar Integration**
-- [ ] **Phase 5: Memory**
+- [x] **Phase 0: Foundation** (已完成)
+  - [x] P0-01 ~ P0-03: 專案基礎骨幹、`pyproject.toml`、`README.md` 與 pytest 配置
+  - [x] P0-04 ~ P0-08: 環境變數範本、基礎測試驗證
+- [x] **Phase 1: Basic LangGraph Agent** (已完成)
+- [x] **Phase 2: Own MCP Server** (已完成)
+- [x] **Phase 3: Third-party MCP Integration** (已完成)
+  - [x] Special Detour: LINE Webhook Gateway x LangGraph
+- [x] **Phase 4: Calendar Integration** (已完成)
+- [ ] **Phase 5: Memory** (Next / 準備中)
 - [ ] **Phase 6: A2A (Agent2Agent)**
 - [ ] **Phase 7: Multi-Agent Orchestration**
 - [ ] **Phase 8: JARVIS User Interface**
@@ -90,7 +100,8 @@ python -m pytest
 
 ## 6. Documentation (延伸文件)
 
-* 總體規格書：[docs/PROJECT_SPEC.md](file:///c:/e.v/docs/PROJECT_SPEC.md)
-* 開發規則守則：[AGENTS.md](file:///c:/e.v/AGENTS.md)
-* 協定與 SDK 版本：[docs/architecture/protocol-versions.md](file:///c:/e.v/docs/architecture/protocol-versions.md)
-* 開發日誌紀錄：[docs/development-log/](file:///c:/e.v/docs/development-log/)
+* 總體規格書：[docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md)
+* 開發規則守則：[AGENTS.md](AGENTS.md)
+* 協定與 SDK 版本：[docs/architecture/protocol-versions.md](docs/architecture/protocol-versions.md)
+* 變更紀錄：[CHANGELOG_AI.md](CHANGELOG_AI.md)
+* 開發日誌紀錄：[docs/development-log/](docs/development-log/)
