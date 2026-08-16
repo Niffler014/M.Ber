@@ -11,36 +11,36 @@
 import sys
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from app.agent.graph import create_agent_graph
-from app.mcp.client import MCPStdioClient
+from app.mcp.manager import MCPManager
 
 
 def run_cli() -> None:
-    """啟動 JARVIS 終端機對話互動介面 (已整合 Own MCP Server)."""
-    print("=" * 60)
-    print("🤖 JARVIS Phase 2: Own MCP Server & LangGraph Agent CLI")
-    print("=" * 60)
+    """啟動 JARVIS 終端機對話互動介面 (已整合 Multi-Server MCP Manager)."""
+    print("=" * 65)
+    print("🤖 JARVIS Phase 3: Third-Party MCP Integration & MCP Manager CLI")
+    print("=" * 65)
 
-    # 1. 建立 MCP Client 連線至自有 MCP Server
-    mcp_client = MCPStdioClient()
-    try:
-        tools = mcp_client.list_tools()
-        tool_names = [t["name"] for t in tools]
-        print(f"🔌 [MCP 連線成功]: 已連線至自有 MCP Server，可用工具清單: {tool_names}")
-    except Exception as e:
-        print(f"⚠️ [MCP 警告]: 無法連線至 MCP Server ({e})，將使用 Fallback 模式")
-        mcp_client = None
+    # 1. 建立 MCP Manager 載入外部設定檔 (config/mcp_servers.json)
+    mcp_manager = MCPManager()
+    connected_servers = list(mcp_manager.clients.keys())
+    all_tools = mcp_manager.list_all_tools()
+    tool_names = [t["name"] for t in all_tools]
 
-    print("-" * 60)
+    print(f"🔌 [MCP Manager 啟動成功]: 已連線伺服器清單: {connected_servers}")
+    print(f"📦 [工具探索彙整]: 共發現 {len(tool_names)} 個工具 ➔ {tool_names}")
+
+    print("-" * 65)
     print("💡 提示：輸入訊息後按 Enter 即可與 JARVIS 對話。")
     print("💡 測試工具關鍵字：")
-    print("   - 輸入包含「現在幾點」或「時間」➔ 呼叫 MCP Server 之 get_current_time")
-    print("   - 輸入包含「echo Hello MCP」➔ 呼叫 MCP Server 之 echo_message")
-    print("   - 輸入包含「計算 15 * 8」➔ 測試計算機工具")
+    print("   - 輸入包含「現在幾點」或「時間」➔ 呼叫 own_server 之 get_current_time")
+    print("   - 輸入「新增筆記：標題=買菜，內容=買雞蛋和鮮奶」➔ 呼叫 sqlite_server 之 add_note")
+    print("   - 輸入「查詢筆記：買菜」或「列出筆記」➔ 呼叫 sqlite_server 之 read_notes")
+    print("   - 輸入「echo Hello MCP」➔ 呼叫 own_server 之 echo_message")
     print("   - 輸入「exit」或「quit」即可退出程式。")
-    print("-" * 60)
+    print("-" * 65)
 
-    # 建立編譯好的狀態圖 (傳入 mcp_client)
-    graph = create_agent_graph(mcp_client=mcp_client)
+    # 建立編譯好的狀態圖 (注入 mcp_manager)
+    graph = create_agent_graph(mcp_manager=mcp_manager)
 
     # 維護多輪對話歷史 (Session Messages)
     chat_history = []

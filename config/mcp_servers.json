@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "own_server": {
+      "command": "python",
+      "args": ["mcp_server/my_mcp_server.py"],
+      "enabled": true,
+      "description": "JARVIS 自有基礎工具伺服器 (包含時間查詢與訊息回傳)"
+    },
+    "sqlite_server": {
+      "command": "python",
+      "args": ["mcp_server/third_party/sqlite_server.py"],
+      "enabled": true,
+      "description": "第三方風格 SQLite 本地筆記與資料庫伺服器 (包含筆記讀取與新增)"
+    }
+  }
+}

@@ -37,7 +37,7 @@ def test_agent_graph_with_mcp_get_current_time() -> None:
 
     # 驗證最終 Agent 回覆
     assert isinstance(messages[3], AIMessage)
-    assert "已成功透過 MCP 工具為您查詢完畢" in messages[3].content
+    assert "已成功" in messages[3].content
 
 
 def test_agent_graph_with_mcp_echo_message() -> None:

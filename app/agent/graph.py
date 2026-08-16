@@ -18,12 +18,13 @@
      這就形成了一個完整的反饋循環（Agent -> Tools -> Agent），直到 Agent 決定不需再用工具為止。
 """
 
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Union
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.state import CompiledStateGraph
 from app.agent.state import AgentState
 from app.agent.nodes import create_agent_node, create_tools_node, tools_node
 from app.mcp.client import MCPStdioClient
+from app.mcp.manager import MCPManager
 
 
 def should_continue(state: AgentState) -> Literal["tools", "__end__"]:
@@ -55,28 +56,32 @@ def should_continue(state: AgentState) -> Literal["tools", "__end__"]:
 
 def create_agent_graph(
     llm: Optional[Any] = None,
-    mcp_client: Optional[MCPStdioClient] = None,
+    mcp_client: Optional[Union[MCPManager, MCPStdioClient]] = None,
+    mcp_manager: Optional[MCPManager] = None,
 ) -> CompiledStateGraph:
     """建立並編譯 JARVIS Agent State Graph.
 
     此函式負責組裝 State、Nodes 與 Edges，並將其編譯為可執行的 CompiledStateGraph。
 
     架構流程：
-    [START] ──> [agent] ──(should_continue)──┬──(有 tool_calls)──> [tools (MCP Client)] ──> 回到 [agent]
+    [START] ──> [agent] ──(should_continue)──┬──(有 tool_calls)──> [tools (MCP Manager)] ──> 回到 [agent]
                                              │
                                              └──(無 tool_calls)──> [END]
 
     Args:
         llm: 自訂的 LLM 模型實例（可選，若無則使用內建模擬器）
-        mcp_client: MCP Stdio 客戶端實例（可選，若傳入則工具由真實 MCP Server 執行）
+        mcp_client: 單一 MCP Stdio 客戶端實例（可選）
+        mcp_manager: MCP 伺服器總管實例（可選，推薦使用，支援多 Server 路由）
 
     Returns:
         編譯完成、可直接呼叫 .invoke() 或 .stream() 的 Graph 物件
     """
+    provider = mcp_manager or mcp_client
+
     builder = StateGraph(AgentState)
 
     agent_node_fn = create_agent_node(llm)
-    tools_node_fn = create_tools_node(mcp_client)
+    tools_node_fn = create_tools_node(provider)
 
     builder.add_node("agent", agent_node_fn)
     builder.add_node("tools", tools_node_fn)

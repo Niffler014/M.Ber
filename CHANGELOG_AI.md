@@ -4,6 +4,50 @@
 
 ---
 
+## [Phase 3] 第三方 MCP 整合與 MCP Manager 總管模組 (Third-party MCP Integration)
+
+- **紀錄時間**：2026-08-16 20:02 (UTC+8)
+- **修改類型**：[新增/升級] Phase 3: Third-party MCP Integration (第三方 MCP 整合)
+- **涉及檔案**：
+  - `config/mcp_servers.json` (新增)
+  - `mcp_server/third_party/sqlite_server.py` (新增)
+  - `mcp_server/third_party/__init__.py` (新增)
+  - `app/mcp/manager.py` (新增)
+  - `app/mcp/__init__.py` (修改)
+  - `app/agent/nodes.py` (修改)
+  - `app/agent/graph.py` (修改)
+  - `app/cli.py` (修改)
+  - `tests/test_mcp_manager.py` (新增)
+  - `tests/test_mcp_third_party.py` (新增)
+  - `tests/test_mcp_integration.py` (修改)
+  - `docs/development-log/2026-08-16-p3-01-third-party-mcp-manager.md` (新增)
+- **修改原因 / 邏輯**：
+  - 實作外部設定檔驅動架構（`config/mcp_servers.json`），免除程式碼寫死伺服器啟動指令。
+  - 實作 `MCPManager` 多伺服器總管模組，管理多個 Server 連線池（Client Pool）、自動工具探索彙整（`list_all_tools`）、智慧請求路由（`call_tool`）與子程序生命週期。
+  - 建立第三方風格的 SQLite 筆記與資料庫伺服器（`sqlite_server.py`），提供 `read_notes` 與 `add_note` 工具。
+  - 實作安全權限模型（Safety & Permission Boundary），自動區分 `READ_ONLY` 與 `WRITE / MUTATION` 操作並記錄安全稽核日誌。
+- **對整體架構影響**：
+  - **具備無限擴充能力**：JARVIS 正式具備「動態掛載多個外部工具伺服器」的能力。未來要載入任何社群或第三方開源 MCP Server（如 GitHub、Google Drive、Notion），只需在 `mcp_servers.json` 加一行設定即可直接使用！
+  - **確立安全稽核基礎**：寫入操作在執行前均有明確的攔截日誌標記，為後續 Phase 的人機協作（Human-in-the-Loop）審批打下基礎。
+- **如何測試**：
+  1. 總管單元測試：`uv run --extra dev pytest tests/test_mcp_manager.py`（測試設定檔載入、多 Server 連線、工具路由與安全評估）。
+  2. 第三方整合測試：`uv run --extra dev pytest tests/test_mcp_third_party.py`（測試 SQLite 筆記讀寫與 Agent 端到端調用）。
+  3. CLI 互動測試：`uv run python -m app.cli`（驗證同時掛載 own_server 與 sqlite_server）。
+  4. 全套回歸測試：`uv run --extra dev pytest`（24/24 測試全數通過）。
+
+### Beginner Explanation (新手解釋：JARVIS 是如何跟外部世界溝通的？)
+
+> 🔌 **從「單孔充電器」升級成「智慧多孔 USB Hub（集線器）」**：
+> 
+> - **在 Phase 2**：我們的 JARVIS 只能連線到自己寫的一個小工具伺服器（就像手機只能插一條專用充電線）。
+> - **在 Phase 3（現在）**：我們給 JARVIS 裝上了一個「智慧 USB 集線器（`MCPManager`）」和一張「外接設備清單（`mcp_servers.json`）」。
+> - 清單上寫著：1 號孔插「自有工具箱（`my_mcp_server`）」、2 號孔插「SQLite 資料庫（`sqlite_server`）」。
+> - 當你對 JARVIS 說「幫我記一下明天要買牛奶」，JARVIS 大腦發出 `add_note` 指令；集線器一秒看懂這是資料庫的工具，自動把請求送去 2 號孔執行，並在螢幕上留下【寫入操作安全記錄】。
+> 
+> 現在的 JARVIS 就像插上了全世界的通用外接卡，隨時可以連上任何第三方軟體！
+
+---
+
 ## [Phase 2] 自有 MCP 伺服器與 Agent 對接 (Own MCP Server & Integration)
 
 - **紀錄時間**：2026-08-16 19:38 (UTC+8)
@@ -20,28 +64,9 @@
   - `tests/test_mcp_integration.py` (新增)
   - `docs/architecture/protocol-versions.md` (修改)
   - `docs/development-log/2026-08-16-p2-01-own-mcp-server.md` (新增)
-- **修改原因 / 邏輯**：
-  - 將 Phase 1 的內嵌 Dummy Tools 升級為符合全球標準 Model Context Protocol (MCP) 的獨立伺服器架構。
-  - 使用官方 Python MCP SDK 2.0.0 (`MCPServer`) 實作基於 `stdio` 傳輸的獨立伺服器，註冊 `get_current_time` 與 `echo_message` 工具。
-  - 實作 `MCPStdioClient` 作為通訊連接器，在 LangGraph 執行時動態啟動 Server 子程序並發送 JSON-RPC 請求取得結果。
-- **對整體架構影響**：
-  - **模組完全解耦**：工具實作與 Agent 調度大腦徹底分開。JARVIS 不再依賴寫死在 Agent 內部的工具函式，而是能以標準 MCP 協定外接任何工具。
-  - **為 Phase 3 (Third-party MCP) 鋪路**：目前的 `MCPStdioClient` 已具備通用性，後續要載入社群現成的 MCP Server（如 SQLite MCP、GitHub MCP、Brave Search MCP）只需傳入對應指令即可無縫掛載。
-- **如何測試**：
-  1. 單元測試：`uv run --extra dev pytest tests/test_mcp_server.py`（驗證 Server stdio 通訊與各工具執行）。
-  2. 整合測試：`uv run --extra dev pytest tests/test_mcp_integration.py`（驗證 LangGraph + MCP 完整對話循環）。
-  3. CLI 互動：`uv run python -m app.cli`（即時輸入「現在幾點」與「echo 測試」驗證動態呼叫）。
-  4. 全套測試：`uv run --extra dev pytest`（18/18 測試全數通過）。
-
-### Beginner Explanation (新手解釋：什麼是自己建立的 MCP Server？)
-
-> 🧰 **「從工具箱裡拿工具」vs「連線到外部工具加工廠」**：
-> 
-> - **在 Phase 1**：我們把計算機函式直接寫死在 Agent 程式碼裡。這就像把板手直接焊死在機器人手臂上，如果要換工具就得拆機器人大腦。
-> - **在 Phase 2（現在）**：我們把工具搬移到一個獨立的小房間（`my_mcp_server.py`），並在機器人與小房間之間插上一條標準傳輸線（`stdio` 管道）。
-> - 當機器人需要查時間或回傳訊息時，機器人透過傳輸線發送訊息：「請幫我跑一下 `get_current_time` 工具」，小房間算好後透過傳輸線回傳結果。
-> 
-> 這樣的好處是：**工具房間愛怎麼改就怎麼改，甚至可以搬到別人電腦上跑，機器人大腦完全不受影響！** 這就是 MCP 協定強大的「解耦與通用性」！
+- **核心內容**：
+  1. 使用官方 Python MCP SDK 2.0.0 (`MCPServer`) 實作基於 `stdio` 傳輸的獨立伺服器，註冊 `get_current_time` 與 `echo_message` 工具。
+  2. 實作 `MCPStdioClient` 作為通訊連接器，在 LangGraph 執行時動態啟動 Server 子程序並發送 JSON-RPC 請求取得結果。
 
 ---
 
@@ -49,30 +74,8 @@
 
 - **紀錄時間**：2026-08-16 18:34 (UTC+8)
 - **變更類型**：[新增] Phase 1: 基礎 LangGraph Agent
-- **涉及檔案**：
-  - `app/agent/state.py` (新增)
-  - `app/agent/nodes.py` (新增)
-  - `app/agent/graph.py` (新增)
-  - `app/agent/__init__.py` (新增)
-  - `app/cli.py` (新增)
-  - `tests/test_agent_graph.py` (新增)
-  - `pyproject.toml` (修改)
-  - `docs/development-log/2026-08-16-p1-01-basic-langgraph-agent.md` (新增)
 - **核心內容**：
-  1. 定義 `AgentState` 資料結構，利用 `Annotated[Sequence[BaseMessage], add_messages]` 提供訊息累加 Reducer 機制。
-  2. 建立 `agent` 大腦思考節點與 `tools` 工具調用節點（內含 Dummy Calculator, System Time, Echo 工具支援）。
-  3. 實作 `should_continue` 條件路由（Conditional Edge），根據訊息中是否帶有 `tool_calls` 自動分流至工具節點或結束對話。
-  4. 建立 `app.cli` 命令列互動進入點，支援即時 State 流轉視覺化監控。
-  5. 建立完整 pytest 單元測試（13/13 測試全數通過）。
-- **對後續 MCP 整合的影響評估**：
-  - **極度有利 / 無縫銜接**：本次建立的 `tools_node` 與 `should_continue` 路由機制是現代 Agent Tool-Calling 的標準協定。在 Phase 2 (Own MCP Server) 與 Phase 3 (Third-party MCP) 實作時，核心 Graph 結構完全無需重構，只需將 `dummy_tool` 替換為標準的 MCP Client 工具呼叫介面即可。
-
-### Beginner Explanation (新手解釋)
-
-> 🏭 **現代化智能工廠與傳送帶的比喻**：
-> 
-> 想像我們在 JARVIS 體內蓋了一座「自動化智能作業流水線」：
-> 1. `AgentState`：工廠白板。所有工人共同記錄資訊的地方。
-> 2. `agent` 節點：總指揮官大腦。看著白板思考，需要工具時貼出派工單（`tool_calls`）。
-> 3. `should_continue`：分流器。有派工單導向工具間，沒有就出貨（結束）。
-> 4. `tools` 節點：工具維修手臂。執行派工單，回傳結果給指揮官做最後統整。
+  1. 定義 `AgentState` 資料結構與 `add_messages` Reducer 機制。
+  2. 建立 `agent` 大腦思考節點與 `tools` 工具調用節點。
+  3. 實作 `should_continue` 條件路由（Conditional Edge）。
+  4. 建立 `app.cli` 命令列互動進入點與單元測試。
