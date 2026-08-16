@@ -21,25 +21,14 @@ from typing import Any, Callable, Dict, List, Optional
 import json
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from app.agent.state import AgentState
+from app.mcp.client import MCPStdioClient
 
 
 def dummy_tool(tool_name: str, args: Dict[str, Any]) -> str:
-    """模擬工具執行函式（Dummy Tool）.
-
-    在 Phase 1 中，我們尚未連接真實的 MCP Server，
-    因此使用 Dummy Tool 來驗證 LangGraph 的工具調用循環架構是否健全。
-
-    Args:
-        tool_name: 要執行的工具名稱（例如 "echo_tool" 或 "calculator"）
-        args: 工具接收的參數字典
-
-    Returns:
-        工具執行的字串結果
-    """
+    """備用 Dummy 工具函式 (Fallback Tool)."""
     if tool_name == "calculator":
         expression = str(args.get("expression", "0"))
         try:
-            # 簡易安全計算 (僅限基礎運算字元)
             allowed_chars = set("0123456789+-*/(). ")
             if not set(expression).issubset(allowed_chars):
                 return f"[Calculator Error]: 不合法的運算字元: {expression}"
@@ -47,117 +36,108 @@ def dummy_tool(tool_name: str, args: Dict[str, Any]) -> str:
             return f"[Calculator Result]: {expression} = {result}"
         except Exception as e:
             return f"[Calculator Error]: 計算失敗 ({e})"
-
-    elif tool_name == "get_system_time":
+    elif tool_name in ["get_current_time", "get_system_time"]:
         from datetime import datetime
         return f"[System Time]: 現在時間為 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-
     else:
-        # 預設 echo tool
-        query = args.get("query") or args.get("input") or str(args)
-        return f"[Dummy Echo Tool]: 收到工具請求 '{tool_name}'，參數為: {query}"
+        query = args.get("query") or args.get("message") or args.get("input") or str(args)
+        return f"[Fallback Echo]: 收到工具請求 '{tool_name}'，參數為: {query}"
 
 
 def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[str, List[BaseMessage]]]:
-    """建立 Agent 節點函式.
+    """建立 Agent 思考節點.
 
-    可接受外部傳入的 LLM 實例（例如 ChatOpenAI、ChatOllama 或 MockLLM）。
-    若未傳入 LLM，則使用內建的確定性模擬器（Deterministic Simulator），
-    確保在無 API Key 的環境下仍能完整走完工具調用流程與測試。
-
-    Args:
-        llm: 實作 LangChain BaseChatModel 介面的語言模型實例（可選）
-
-    Returns:
-        符合 LangGraph 規格的節點函式 (state) -> dict
+    支援注入真實 LLM 或使用內建模擬器（分析使用者訊息發起 MCP 工具調用）。
     """
-
     def agent_node(state: AgentState) -> Dict[str, List[BaseMessage]]:
-        """Agent 大腦思考節點.
-
-        讀取對話歷史中的所有 messages，決定下一步是要直接回答使用者，
-        還是產生 tool_calls 請求呼叫外部工具。
-        """
         messages = list(state.get("messages", []))
         if not messages:
             return {"messages": [AIMessage(content="您好！我是 JARVIS，請問有什麼我可以協助您的？")]}
 
-        # 如果有注入真實的 LLM，直接呼叫 LLM
+        # 若有注入真實 LLM，直接呼叫
         if llm is not None:
             response = llm.invoke(messages)
             if not isinstance(response, BaseMessage):
                 response = AIMessage(content=str(response))
             return {"messages": [response]}
 
-        # --- 無 LLM 時的內建模擬邏輯 (Fallback / Demo / Test 模式) ---
+        # --- 確定性模擬器 (Fallback / Demo 模式) ---
         last_msg = messages[-1]
 
-        # 情況 A：如果上一則訊息是 ToolMessage，代表工具剛執行完畢，大腦做最後總結
+        # 情況 A：工具執行結果已傳回，大腦統整回覆
         if isinstance(last_msg, ToolMessage):
             tool_output = last_msg.content
             return {
                 "messages": [
-                    AIMessage(content=f"已成功為您執行工具！執行結果如下：\n{tool_output}\n請問還需要其他協助嗎？")
+                    AIMessage(
+                        content=f"已成功透過 MCP 工具為您查詢完畢！執行結果如下：\n{tool_output}\n請問還需要其他協助嗎？"
+                    )
                 ]
             }
 
-        # 情況 B：分析使用者最新輸入的文字
         user_text = last_msg.content if isinstance(last_msg.content, str) else str(last_msg.content)
         user_text_lower = user_text.lower()
 
+        # 檢查是否觸發 MCP get_current_time 工具
+        if "時間" in user_text or "幾點" in user_text or "time" in user_text_lower:
+            return {
+                "messages": [
+                    AIMessage(
+                        content="我正在透過 MCP 協定向 Server 請求取得目前的系統時間...",
+                        tool_calls=[
+                            {
+                                "id": "call_mcp_time_001",
+                                "name": "get_current_time",
+                                "args": {},
+                            }
+                        ],
+                    )
+                ]
+            }
+
+        # 檢查是否觸發 MCP echo_message 工具
+        elif "echo" in user_text_lower or "回傳" in user_text or "測試" in user_text:
+            msg_to_echo = user_text
+            for prefix in ["echo", "回傳", "測試"]:
+                if prefix in msg_to_echo:
+                    msg_to_echo = msg_to_echo.split(prefix, 1)[-1].strip() or "測試訊息"
+                    break
+            return {
+                "messages": [
+                    AIMessage(
+                        content="已為您發起 MCP Echo 工具調用請求。",
+                        tool_calls=[
+                            {
+                                "id": "call_mcp_echo_001",
+                                "name": "echo_message",
+                                "args": {"message": msg_to_echo},
+                            }
+                        ],
+                    )
+                ]
+            }
+
         # 檢查是否觸發計算機工具
-        if "計算" in user_text or "算一下" in user_text or "calculate" in user_text_lower:
-            # 簡易提取運算式
+        elif "計算" in user_text or "算一下" in user_text or "calculate" in user_text_lower:
             import re
             match = re.search(r"[\d\+\-\*\/\(\)\. ]{3,}", user_text)
             expr = match.group(0).strip() if match else "1 + 1"
-            tool_call = {
-                "id": "call_calc_001",
-                "name": "calculator",
-                "args": {"expression": expr},
-            }
             return {
                 "messages": [
                     AIMessage(
                         content="我需要使用計算機工具來為您計算這個數值。",
-                        tool_calls=[tool_call],
+                        tool_calls=[
+                            {
+                                "id": "call_calc_001",
+                                "name": "calculator",
+                                "args": {"expression": expr},
+                            }
+                        ],
                     )
                 ]
             }
 
-        # 檢查是否觸發時間查詢工具
-        elif "時間" in user_text or "幾點" in user_text or "time" in user_text_lower:
-            tool_call = {
-                "id": "call_time_001",
-                "name": "get_system_time",
-                "args": {},
-            }
-            return {
-                "messages": [
-                    AIMessage(
-                        content="我正在查詢目前的系統時間...",
-                        tool_calls=[tool_call],
-                    )
-                ]
-            }
-
-        # 檢查是否觸發通用 dummy 工具
-        elif "工具" in user_text or "tool" in user_text_lower or "echo" in user_text_lower:
-            tool_call = {
-                "id": "call_echo_001",
-                "name": "dummy_echo",
-                "args": {"query": user_text},
-            }
-            return {
-                "messages": [
-                    AIMessage(
-                        content="已為您觸發範例工具調用。",
-                        tool_calls=[tool_call],
-                    )
-                ]
-            }
-
-        # 情況 C：一般閒聊 / 問答（不需要調用工具，直接給出最終文字回覆）
+        # 一般對話回覆
         return {
             "messages": [
                 AIMessage(
@@ -169,37 +149,52 @@ def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[
     return agent_node
 
 
-def tools_node(state: AgentState) -> Dict[str, List[BaseMessage]]:
-    """Tools 執行節點.
+def create_tools_node(
+    mcp_client: Optional[MCPStdioClient] = None,
+) -> Callable[[AgentState], Dict[str, List[BaseMessage]]]:
+    """建立 Tools 執行節點.
 
-    檢查最新一則 AIMessage 中是否包含 `tool_calls`。
-    若有，依序執行對應的工具，並將每個工具的執行結果包裝成 `ToolMessage` 回傳。
+    若有提供 `mcp_client`，優先透過標準 stdio MCP 協定向 MCP Server 請求執行；
+    若無或執行失敗，則使用 fallback dummy 工具。
     """
-    messages = list(state.get("messages", []))
-    if not messages:
-        return {"messages": []}
+    def tools_node_fn(state: AgentState) -> Dict[str, List[BaseMessage]]:
+        messages = list(state.get("messages", []))
+        if not messages:
+            return {"messages": []}
 
-    last_msg = messages[-1]
-    tool_messages: List[BaseMessage] = []
+        last_msg = messages[-1]
+        tool_messages: List[BaseMessage] = []
+        tool_calls = getattr(last_msg, "tool_calls", []) or []
 
-    # 檢查是否有 tool_calls 屬性
-    tool_calls = getattr(last_msg, "tool_calls", []) or []
+        for call in tool_calls:
+            call_id = call.get("id", "call_default")
+            tool_name = call.get("name", "unknown_tool")
+            args = call.get("args", {})
 
-    for call in tool_calls:
-        call_id = call.get("id", "call_default")
-        tool_name = call.get("name", "unknown_tool")
-        args = call.get("args", {})
+            # 透過真實 MCP Client 執行工具
+            result_str = None
+            if mcp_client is not None and tool_name in ["get_current_time", "echo_message"]:
+                try:
+                    result_str = mcp_client.call_tool(tool_name, args)
+                except Exception as e:
+                    result_str = f"[MCP Error]: 呼叫工具 '{tool_name}' 發生錯誤 ({e})"
 
-        # 執行 dummy 工具
-        result_str = dummy_tool(tool_name, args)
+            # 若未透過 MCP 執行，使用 fallback 工具
+            if result_str is None:
+                result_str = dummy_tool(tool_name, args)
 
-        # 建立 ToolMessage：必須帶入 tool_call_id，讓 LLM 知道這是回應該次呼叫的結果
-        tool_messages.append(
-            ToolMessage(
-                content=result_str,
-                tool_call_id=call_id,
-                name=tool_name,
+            tool_messages.append(
+                ToolMessage(
+                    content=result_str,
+                    tool_call_id=call_id,
+                    name=tool_name,
+                )
             )
-        )
 
-    return {"messages": tool_messages}
+        return {"messages": tool_messages}
+
+    return tools_node_fn
+
+
+# 預設 tools_node（無 client 時使用 fallback）
+tools_node = create_tools_node()

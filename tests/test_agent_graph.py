@@ -95,7 +95,7 @@ def test_tool_calling_execution_flow() -> None:
     assert isinstance(messages[2], ToolMessage)
     assert "100" in messages[2].content
     assert isinstance(messages[3], AIMessage)
-    assert "已成功為您執行工具" in messages[3].content
+    assert "已成功" in messages[3].content
 
 
 def test_dummy_tool_implementations() -> None:

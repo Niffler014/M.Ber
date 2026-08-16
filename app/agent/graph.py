@@ -22,7 +22,8 @@ from typing import Any, Literal, Optional
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.state import CompiledStateGraph
 from app.agent.state import AgentState
-from app.agent.nodes import create_agent_node, tools_node
+from app.agent.nodes import create_agent_node, create_tools_node, tools_node
+from app.mcp.client import MCPStdioClient
 
 
 def should_continue(state: AgentState) -> Literal["tools", "__end__"]:
@@ -52,35 +53,36 @@ def should_continue(state: AgentState) -> Literal["tools", "__end__"]:
     return END
 
 
-def create_agent_graph(llm: Optional[Any] = None) -> CompiledStateGraph:
+def create_agent_graph(
+    llm: Optional[Any] = None,
+    mcp_client: Optional[MCPStdioClient] = None,
+) -> CompiledStateGraph:
     """建立並編譯 JARVIS Agent State Graph.
 
     此函式負責組裝 State、Nodes 與 Edges，並將其編譯為可執行的 CompiledStateGraph。
 
     架構流程：
-    [START] ──> [agent] ──(should_continue)──┬──(有 tool_calls)──> [tools] ──> 回到 [agent]
+    [START] ──> [agent] ──(should_continue)──┬──(有 tool_calls)──> [tools (MCP Client)] ──> 回到 [agent]
                                              │
                                              └──(無 tool_calls)──> [END]
 
     Args:
         llm: 自訂的 LLM 模型實例（可選，若無則使用內建模擬器）
+        mcp_client: MCP Stdio 客戶端實例（可選，若傳入則工具由真實 MCP Server 執行）
 
     Returns:
         編譯完成、可直接呼叫 .invoke() 或 .stream() 的 Graph 物件
     """
-    # 1. 建立基於 AgentState 的狀態圖建構器
     builder = StateGraph(AgentState)
 
-    # 2. 註冊 Nodes（工作節點）
     agent_node_fn = create_agent_node(llm)
-    builder.add_node("agent", agent_node_fn)
-    builder.add_node("tools", tools_node)
+    tools_node_fn = create_tools_node(mcp_client)
 
-    # 3. 建立 Edges（連接邊）
-    # 從起點 START 直通 agent 節點
+    builder.add_node("agent", agent_node_fn)
+    builder.add_node("tools", tools_node_fn)
+
     builder.add_edge(START, "agent")
 
-    # 從 agent 節點出發，透過 should_continue 條件函式決定下一步
     builder.add_conditional_edges(
         "agent",
         should_continue,
@@ -90,9 +92,6 @@ def create_agent_graph(llm: Optional[Any] = None) -> CompiledStateGraph:
         },
     )
 
-    # 工具執行完畢後，必定將結果送回 agent 節點進行下一步思考
     builder.add_edge("tools", "agent")
 
-    # 4. 編譯狀態圖為可執行物件
-    graph = builder.compile()
-    return graph
+    return builder.compile()

@@ -10,25 +10,25 @@ The purpose of this document is to prevent AI coding agents from silently implem
 
 ### Current Project Status
 
-MCP integration has not yet been implemented.
+Phase 2 (Own MCP Server) implemented and active.
 
 ### Reference
 
-The implementation must consult the official MCP specification before Phase 2.
-
 Official specification:
-
 https://modelcontextprotocol.io/specification/
 
-### Required Record
+### Recorded Configuration (Phase 2)
 
-When MCP implementation begins, record:
-
-- MCP specification version
-- MCP SDK
-- SDK version
-- Transport used
-- Compatibility notes
+- **MCP Specification Version**: 2024-11-05 (Model Context Protocol Standard)
+- **MCP SDK**: `mcp` (Python official SDK)
+- **SDK Version**: `2.0.0`
+- **Transport**: `stdio` (JSON-RPC 2.0 via sub-process standard I/O streams)
+- **Active Servers**:
+  - `mcp_server/my_mcp_server.py` (`jarvis-own-mcp-server`):
+    - Tools: `get_current_time`, `echo_message`
+- **Compatibility Notes**:
+  - Requires `anyio` for asynchronous standard I/O streams handling.
+  - Avoid naming local project package as `mcp/` to prevent Python namespace shadowing.
 
 ---
 

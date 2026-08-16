@@ -11,23 +11,36 @@
 import sys
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from app.agent.graph import create_agent_graph
+from app.mcp.client import MCPStdioClient
 
 
 def run_cli() -> None:
-    """啟動 JARVIS 終端機對話互動介面."""
+    """啟動 JARVIS 終端機對話互動介面 (已整合 Own MCP Server)."""
     print("=" * 60)
-    print("🤖 JARVIS Phase 1: Basic LangGraph Agent CLI 互動介面")
+    print("🤖 JARVIS Phase 2: Own MCP Server & LangGraph Agent CLI")
     print("=" * 60)
+
+    # 1. 建立 MCP Client 連線至自有 MCP Server
+    mcp_client = MCPStdioClient()
+    try:
+        tools = mcp_client.list_tools()
+        tool_names = [t["name"] for t in tools]
+        print(f"🔌 [MCP 連線成功]: 已連線至自有 MCP Server，可用工具清單: {tool_names}")
+    except Exception as e:
+        print(f"⚠️ [MCP 警告]: 無法連線至 MCP Server ({e})，將使用 Fallback 模式")
+        mcp_client = None
+
+    print("-" * 60)
     print("💡 提示：輸入訊息後按 Enter 即可與 JARVIS 對話。")
     print("💡 測試工具關鍵字：")
+    print("   - 輸入包含「現在幾點」或「時間」➔ 呼叫 MCP Server 之 get_current_time")
+    print("   - 輸入包含「echo Hello MCP」➔ 呼叫 MCP Server 之 echo_message")
     print("   - 輸入包含「計算 15 * 8」➔ 測試計算機工具")
-    print("   - 輸入包含「現在時間」➔ 測試系統時間工具")
-    print("   - 輸入包含「呼叫工具」➔ 測試 Echo 範例工具")
     print("   - 輸入「exit」或「quit」即可退出程式。")
     print("-" * 60)
 
-    # 建立編譯好的狀態圖
-    graph = create_agent_graph()
+    # 建立編譯好的狀態圖 (傳入 mcp_client)
+    graph = create_agent_graph(mcp_client=mcp_client)
 
     # 維護多輪對話歷史 (Session Messages)
     chat_history = []
