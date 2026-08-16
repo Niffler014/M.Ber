@@ -6,10 +6,17 @@ app/agent/__init__.py
 app/agent/graph.py
 app/agent/nodes.py
 app/agent/state.py
+app/mcp/__init__.py
+app/mcp/client.py
+app/mcp/manager.py
 jarvis_agent.egg-info/PKG-INFO
 jarvis_agent.egg-info/SOURCES.txt
 jarvis_agent.egg-info/dependency_links.txt
 jarvis_agent.egg-info/requires.txt
 jarvis_agent.egg-info/top_level.txt
 tests/test_agent_graph.py
+tests/test_mcp_integration.py
+tests/test_mcp_manager.py
+tests/test_mcp_server.py
+tests/test_mcp_third_party.py
 tests/test_smoke.py

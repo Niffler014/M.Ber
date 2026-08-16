@@ -4,6 +4,46 @@
 
 ---
 
+## [Special Detour] LINE 通訊介面模組 (LINE Webhook Gateway x LangGraph)
+
+- **紀錄時間**：2026-08-16 20:43 (UTC+8)
+- **修改類型**：`[Special Detour: LINE UI]` LINE Gateway 模組
+- **涉及檔案**：
+  - `app/interfaces/line_gateway.py` (新增)
+  - `app/interfaces/__init__.py` (新增)
+  - `app/agent/graph.py` (修改，支援 `checkpointer` 參數與狀態持久化)
+  - `.env.example` (修改，新增 LINE Channel 金鑰配置)
+  - `tests/test_line_gateway.py` (新增)
+  - `docs/development-log/2026-08-16-special-detour-line-gateway.md` (新增)
+- **修改原因 / 邏輯**：
+  - 建立 FastAPI Webhook Endpoint（`/callback`），接收來自 LINE Platform 的推播訊息事件。
+  - 使用 HMAC-SHA256 驗證 `X-Line-Signature` 簽章，防止非法與偽造請求。
+  - 將 LINE `user_id` 映射為 LangGraph 的 `thread_id`，搭配 `MemorySaver` 確保不同使用者具備獨立且隔離的連續對話歷史。
+  - 觸發 LangGraph Agent 運算與 MCP 工具調用後，透過 LINE Messaging API 將結果回覆給使用者。
+- **Architecture Note:**
+  - **解耦設計 (Decoupling Architecture)**：本次實作的 LINE Gateway 置於獨立介面層（`app/interfaces/line_gateway.py`），純粹扮演「外部通訊轉接適配器（Adapter / Gateway）」角色。LangGraph 核心（`app/agent/`）與 MCP 總管（`app/mcp/`）完全維持獨立與純粹，不依賴任何 LINE 特定的 SDK 或資料結構。這確保了 JARVIS 核心大腦具備極致的模組化與可攜性，未來可以無縫切換或同時並行 CLI 終端機、Streamlit Web UI、Discord 或 Slack 等任何介面！
+- **對整體架構影響**：
+  - JARVIS 正式具備從本機終端機走向行動通訊軟體（LINE）的實時互動能力，且支援多使用者並行獨立對話記憶。
+- **如何測試**：
+  1. 單元測試：`uv run --extra dev pytest tests/test_line_gateway.py`（驗證 `/health`、缺少/錯誤簽章 400 阻擋、合法簽章解析與多使用者 `thread_id` 記憶隔離）。
+  2. 本機除錯：啟動 `uv run uvicorn app.interfaces.line_gateway:app --reload --port 8000` 並搭配 `ngrok http 8000` 連接 LINE Developers Webhook。
+  3. 全套回歸測試：`uv run --extra dev pytest`（29/29 測試全數通過）。
+
+### Beginner Explanation (新手解釋：什麼是 Webhook 與 thread_id 映射？)
+
+> 📮 **什麼是 Webhook（即時掛號通知）？**
+> 
+> - **傳統輪詢（Polling）**：就像你每隔 3 秒跑去信箱看「有我的信嗎？」，非常耗電且浪費時間。
+> - **Webhook（掛號通知）**：當有人在 LINE 傳訊息給你時，LINE 伺服器會「主動按門鈴（HTTP POST）」把信送到你的門口（`/callback` 端點）。
+> 
+> 🧠 **什麼是 `thread_id` 映射（獨立記憶抽屜）？**
+> 
+> - 想像 JARVIS 是一個管家，每位加好友的 LINE 使用者都有一個專屬號碼（`user_id`，如 `U_ALICE` 與 `U_BOB`）。
+> - JARVIS 在大腦裡為每個人開了一個「獨立抽屜（`thread_id`）」。
+> - 當 Alice 說「我叫愛麗絲」，JARVIS 把記憶收進 Alice 的抽屜；當 Bob 來說話時，JARVIS 打開 Bob 的抽屜，完全不會把 Alice 的祕密搞混！
+
+---
+
 ## [Phase 3] 第三方 MCP 整合與 MCP Manager 總管模組 (Third-party MCP Integration)
 
 - **紀錄時間**：2026-08-16 20:02 (UTC+8)
@@ -21,30 +61,8 @@
   - `tests/test_mcp_third_party.py` (新增)
   - `tests/test_mcp_integration.py` (修改)
   - `docs/development-log/2026-08-16-p3-01-third-party-mcp-manager.md` (新增)
-- **修改原因 / 邏輯**：
-  - 實作外部設定檔驅動架構（`config/mcp_servers.json`），免除程式碼寫死伺服器啟動指令。
-  - 實作 `MCPManager` 多伺服器總管模組，管理多個 Server 連線池（Client Pool）、自動工具探索彙整（`list_all_tools`）、智慧請求路由（`call_tool`）與子程序生命週期。
-  - 建立第三方風格的 SQLite 筆記與資料庫伺服器（`sqlite_server.py`），提供 `read_notes` 與 `add_note` 工具。
-  - 實作安全權限模型（Safety & Permission Boundary），自動區分 `READ_ONLY` 與 `WRITE / MUTATION` 操作並記錄安全稽核日誌。
-- **對整體架構影響**：
-  - **具備無限擴充能力**：JARVIS 正式具備「動態掛載多個外部工具伺服器」的能力。未來要載入任何社群或第三方開源 MCP Server（如 GitHub、Google Drive、Notion），只需在 `mcp_servers.json` 加一行設定即可直接使用！
-  - **確立安全稽核基礎**：寫入操作在執行前均有明確的攔截日誌標記，為後續 Phase 的人機協作（Human-in-the-Loop）審批打下基礎。
-- **如何測試**：
-  1. 總管單元測試：`uv run --extra dev pytest tests/test_mcp_manager.py`（測試設定檔載入、多 Server 連線、工具路由與安全評估）。
-  2. 第三方整合測試：`uv run --extra dev pytest tests/test_mcp_third_party.py`（測試 SQLite 筆記讀寫與 Agent 端到端調用）。
-  3. CLI 互動測試：`uv run python -m app.cli`（驗證同時掛載 own_server 與 sqlite_server）。
-  4. 全套回歸測試：`uv run --extra dev pytest`（24/24 測試全數通過）。
-
-### Beginner Explanation (新手解釋：JARVIS 是如何跟外部世界溝通的？)
-
-> 🔌 **從「單孔充電器」升級成「智慧多孔 USB Hub（集線器）」**：
-> 
-> - **在 Phase 2**：我們的 JARVIS 只能連線到自己寫的一個小工具伺服器（就像手機只能插一條專用充電線）。
-> - **在 Phase 3（現在）**：我們給 JARVIS 裝上了一個「智慧 USB 集線器（`MCPManager`）」和一張「外接設備清單（`mcp_servers.json`）」。
-> - 清單上寫著：1 號孔插「自有工具箱（`my_mcp_server`）」、2 號孔插「SQLite 資料庫（`sqlite_server`）」。
-> - 當你對 JARVIS 說「幫我記一下明天要買牛奶」，JARVIS 大腦發出 `add_note` 指令；集線器一秒看懂這是資料庫的工具，自動把請求送去 2 號孔執行，並在螢幕上留下【寫入操作安全記錄】。
-> 
-> 現在的 JARVIS 就像插上了全世界的通用外接卡，隨時可以連上任何第三方軟體！
+- **核心內容**：
+  - 外部設定檔驅動架構、`MCPManager` 多伺服器連線池、SQLite 筆記資料庫伺服器與安全權限邊界模型（`READ_ONLY` vs `WRITE / MUTATION`）。
 
 ---
 
@@ -52,21 +70,8 @@
 
 - **紀錄時間**：2026-08-16 19:38 (UTC+8)
 - **修改類型**：[新增/升級] Phase 2: Own MCP Server (自有 MCP 伺服器)
-- **涉及檔案**：
-  - `mcp_server/my_mcp_server.py` (新增)
-  - `mcp_server/__init__.py` (新增)
-  - `app/mcp/client.py` (新增)
-  - `app/mcp/__init__.py` (新增)
-  - `app/agent/nodes.py` (修改)
-  - `app/agent/graph.py` (修改)
-  - `app/cli.py` (修改)
-  - `tests/test_mcp_server.py` (新增)
-  - `tests/test_mcp_integration.py` (新增)
-  - `docs/architecture/protocol-versions.md` (修改)
-  - `docs/development-log/2026-08-16-p2-01-own-mcp-server.md` (新增)
 - **核心內容**：
-  1. 使用官方 Python MCP SDK 2.0.0 (`MCPServer`) 實作基於 `stdio` 傳輸的獨立伺服器，註冊 `get_current_time` 與 `echo_message` 工具。
-  2. 實作 `MCPStdioClient` 作為通訊連接器，在 LangGraph 執行時動態啟動 Server 子程序並發送 JSON-RPC 請求取得結果。
+  - 官方 Python MCP SDK 2.0.0 (`MCPServer`) stdio 伺服器與 `MCPStdioClient` 客戶端連接器。
 
 ---
 
@@ -75,7 +80,4 @@
 - **紀錄時間**：2026-08-16 18:34 (UTC+8)
 - **變更類型**：[新增] Phase 1: 基礎 LangGraph Agent
 - **核心內容**：
-  1. 定義 `AgentState` 資料結構與 `add_messages` Reducer 機制。
-  2. 建立 `agent` 大腦思考節點與 `tools` 工具調用節點。
-  3. 實作 `should_continue` 條件路由（Conditional Edge）。
-  4. 建立 `app.cli` 命令列互動進入點與單元測試。
+  - `AgentState`、`agent` 節點、`tools` 節點、`should_continue` 條件路由與 CLI 介面。

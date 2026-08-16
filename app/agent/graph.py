@@ -58,6 +58,7 @@ def create_agent_graph(
     llm: Optional[Any] = None,
     mcp_client: Optional[Union[MCPManager, MCPStdioClient]] = None,
     mcp_manager: Optional[MCPManager] = None,
+    checkpointer: Optional[Any] = None,
 ) -> CompiledStateGraph:
     """建立並編譯 JARVIS Agent State Graph.
 
@@ -72,6 +73,7 @@ def create_agent_graph(
         llm: 自訂的 LLM 模型實例（可選，若無則使用內建模擬器）
         mcp_client: 單一 MCP Stdio 客戶端實例（可選）
         mcp_manager: MCP 伺服器總管實例（可選，推薦使用，支援多 Server 路由）
+        checkpointer: 狀態檢查點管理器（例如 MemorySaver，支援基於 thread_id 的對話記憶隔離）
 
     Returns:
         編譯完成、可直接呼叫 .invoke() 或 .stream() 的 Graph 物件
@@ -98,5 +100,8 @@ def create_agent_graph(
     )
 
     builder.add_edge("tools", "agent")
+
+    if checkpointer is not None:
+        return builder.compile(checkpointer=checkpointer)
 
     return builder.compile()

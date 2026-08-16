@@ -9,6 +9,8 @@ Requires-Dist: python-dotenv>=1.0.0
 Requires-Dist: langchain-core>=0.3.0
 Requires-Dist: langgraph>=0.2.0
 Requires-Dist: mcp>=2.0.0
+Requires-Dist: fastapi>=0.141.1
+Requires-Dist: line-bot-sdk>=3.25.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0.0; extra == "dev"
 
