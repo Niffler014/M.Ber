@@ -1,4 +1,4 @@
-"""Unit Tests for JARVIS Phase 6 - A2A Agent Discovery Service.
+"""Unit Tests for M.Ber Phase 6 - A2A Agent Discovery Service.
 
 驗證項目：
 1. Discovery 服務載入 config/a2a_agents.json 設定檔

@@ -1,4 +1,4 @@
-"""JARVIS A2A (Agent-to-Agent) Protocol Domain Models (A2A 1.0.0).
+"""M.Ber A2A (Agent-to-Agent) Protocol Domain Models (A2A 1.0.0).
 
 【新手教學 / 觀念解析】：
 1. 什麼是 A2A (Agent-to-Agent Protocol)？
@@ -31,8 +31,8 @@ class TextPart(BaseModel):
     text: str = Field(..., description="文字內容")
 
 
-# 支援之 Part 類型聯集 (Phase 6 最小實作支援 TextPart，保留擴充彈性)
-Part = Union[TextPart, Dict[str, Any]]
+# Phase 6 最小實作嚴格支援 TextPart，拒絕無型別約束之任意字典
+Part = TextPart
 
 
 class Artifact(BaseModel):
@@ -60,13 +60,7 @@ class Message(BaseModel):
     @property
     def text_content(self) -> str:
         """提取訊息中所有 TextPart 之合併文字內容."""
-        texts = []
-        for part in self.parts:
-            if isinstance(part, TextPart):
-                texts.append(part.text)
-            elif isinstance(part, dict) and part.get("type") == "text":
-                texts.append(str(part.get("text", "")))
-        return "\n".join(texts)
+        return "\n".join(part.text for part in self.parts if isinstance(part, TextPart))
 
 
 # ============================================================================
@@ -102,6 +96,10 @@ class Task(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict, description="任務自訂元數據")
 
 
+# A2A 1.0 SendMessage 回應可以是狀態化 Task 或直接 Message 回應
+SendMessageResponse = Union[Task, Message]
+
+
 # ============================================================================
 # 3. 代理人名片與技能聲明 (Agent Card & Skills)
 # ============================================================================
@@ -128,7 +126,7 @@ class AgentCapabilities(BaseModel):
 class AgentCard(BaseModel):
     """A2A 1.0.0 官方標準 Agent Card (代理人名片)."""
 
-    name: str = Field(..., description="代理人名稱 (例如: JARVIS, ResearchAgent)")
+    name: str = Field(..., description="代理人名稱 (例如: M.Ber, ResearchAgent)")
     description: str = Field(..., description="代理人職責簡介與角色定位")
     url: str = Field(..., description="A2A 伺服器通訊基底 URL")
     version: str = Field(default="1.0.0", description="代理人實作版本")

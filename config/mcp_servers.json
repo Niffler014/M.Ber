@@ -7,7 +7,7 @@
         "PYTHONPATH": "."
       },
       "enabled": true,
-      "description": "JARVIS 自有 MCP 伺服器 (包含時間查詢與回音工具)"
+      "description": "M.Ber 自有 MCP 伺服器 (包含時間查詢與回音工具)"
     },
     "sqlite_server": {
       "command": "python",
@@ -25,7 +25,7 @@
         "PYTHONPATH": "."
       },
       "enabled": true,
-      "description": "JARVIS 行事曆與行程管理 MCP 伺服器 (Calendar Events CRUD)"
+      "description": "M.Ber 行事曆與行程管理 MCP 伺服器 (Calendar Events CRUD)"
     }
   }
 }

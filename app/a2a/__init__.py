@@ -1,4 +1,4 @@
-"""JARVIS A2A (Agent-to-Agent) Interoperability Package (Phase 6).
+"""M.Ber A2A (Agent-to-Agent) Interoperability Package (Phase 6).
 
 提供符合 A2A 1.0.0 規範之核心資料模型、發現服務與 JSON-RPC 2.0 客戶端：
 - AgentCard, AgentSkill, AgentCapabilities: 代理人名片與技能宣告
@@ -19,6 +19,7 @@ from app.a2a.models import (
     JSONRPCResponse,
     Message,
     Part,
+    SendMessageResponse,
     Task,
     TaskState,
     TaskStatus,
@@ -37,6 +38,7 @@ __all__ = [
     "JSONRPCResponse",
     "Message",
     "Part",
+    "SendMessageResponse",
     "Task",
     "TaskState",
     "TaskStatus",

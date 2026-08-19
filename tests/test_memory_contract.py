@@ -1,4 +1,4 @@
-"""Unit Tests for JARVIS Memory Subsystem Architecture & Contract (Phase 5.1).
+"""Unit Tests for M.Ber Memory Subsystem Architecture & Contract (Phase 5.1).
 
 驗證項目：
 1. MemoryItem 與 MemoryType 領域模型屬性與預設值

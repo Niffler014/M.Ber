@@ -1,6 +1,28 @@
-# CHANGELOG_AI — JARVIS 專案變更紀錄
+# CHANGELOG_AI — M.Ber 專案變更紀錄
 
 此文件遵循 AI 自動變更紀錄協議（Changelog Protocol），由 AI 助理在每次完成階段性里程碑並驗證通過後自動維護與更新。
+
+---
+
+## [Project Identity] 專案名稱正式更名為 "M.Ber" (Project Identity Rename)
+
+- **紀錄時間**：2026-08-20 02:22 (UTC+8)
+- **修改類型**：[文件/身份更名] 專案名稱由 "JARVIS" 正式更名為 "M.Ber"
+- **涉及檔案**：
+  - `README.md`
+  - `AGENTS.md`
+  - `docs/PROJECT_SPEC.md`
+  - `docs/architecture/protocol-versions.md`
+  - `.env.example`
+  - `pyproject.toml`
+  - `app/cli.py`, `app/agent/nodes.py`, `app/interfaces/line_gateway.py`
+  - `mcp_server/my_mcp_server.py`, `mcp_server/third_party/*.py`
+  - `tests/**/*.py`
+- **修改原因 / 邏輯**：
+  - 專案 Repository 已正式定名為 "M.Ber"，為確保使用者介面、文件與專案元數據之一致性，進行全面而謹慎的身份更名。
+  - 嚴格維持架構邊界不變：不修改底層模組架構（保留 `app/`, `memory/`, `mcp_server/`, `services/` 目錄），不修改外部協定標準（A2A, MCP, JSON-RPC, LangGraph），不重寫歷史開發日誌。
+- **對整體架構影響**：
+  - 無架構與行為變更，全套 59 項測試持續保持 100% 通過。
 
 ---
 

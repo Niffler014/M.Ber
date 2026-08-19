@@ -17,7 +17,7 @@ import anyio
 from mcp.server import MCPServer
 
 # 建立獨立的 SQLite MCP 伺服器
-app = MCPServer("jarvis-sqlite-server")
+app = MCPServer("mber-sqlite-server")
 
 # 本地 SQLite 資料庫路徑 (儲存於專案目錄下的 notes.db)
 DB_PATH = Path(__file__).resolve().parent.parent.parent / "notes.db"

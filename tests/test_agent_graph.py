@@ -1,4 +1,4 @@
-"""Unit Tests for JARVIS Phase 1 - Basic LangGraph Agent.
+"""Unit Tests for M.Ber Phase 1 - Basic LangGraph Agent.
 
 驗證項目：
 1. Graph 編譯完整性
@@ -36,7 +36,7 @@ def test_router_should_continue() -> None:
     normal_state: AgentState = {
         "messages": [
             HumanMessage(content="你好"),
-            AIMessage(content="你好！我是 JARVIS。"),
+            AIMessage(content="你好！我是 M.Ber。"),
         ]
     }
     assert should_continue(normal_state) == END
@@ -69,7 +69,7 @@ def test_normal_chat_execution_flow() -> None:
     assert len(messages) == 2
     assert isinstance(messages[0], HumanMessage)
     assert isinstance(messages[1], AIMessage)
-    assert "JARVIS" in messages[1].content
+    assert "M.Ber" in messages[1].content
     assert not getattr(messages[1], "tool_calls", None)
 
 

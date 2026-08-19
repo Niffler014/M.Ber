@@ -1,4 +1,4 @@
-"""Unit Tests for JARVIS Phase 6 - A2A 1.0.0 Domain Models & Agent Card.
+"""Unit Tests for M.Ber Phase 6 - A2A 1.0.0 Domain Models & Agent Card.
 
 驗證項目：
 1. AgentCard 與 AgentSkill 模型屬性與預設值
@@ -29,14 +29,14 @@ from app.a2a.models import (
 def test_agent_card_instantiation_and_defaults() -> None:
     """測試 AgentCard 建立、預設欄位與型別檢查."""
     card = AgentCard(
-        name="JARVIS",
+        name="M.Ber",
         description="Personal AI Assistant",
-        url="https://jarvis.local/v1/a2a",
+        url="https://mber.local/v1/a2a",
     )
 
-    assert card.name == "JARVIS"
+    assert card.name == "M.Ber"
     assert card.description == "Personal AI Assistant"
-    assert card.url == "https://jarvis.local/v1/a2a"
+    assert card.url == "https://mber.local/v1/a2a"
     assert card.version == "1.0.0"
     assert card.protocol_version == "1.0.0"
     assert card.capabilities.streaming is False
@@ -142,3 +142,20 @@ def test_agent_card_json_serialization_roundtrip() -> None:
     assert len(parsed.skills) == 1
     assert parsed.skills[0].id == "deep_research"
     assert parsed.skills[0].examples == ["Search recent AI agent papers"]
+
+
+def test_a2a_invalid_part_rejection() -> None:
+    """測試 Part 嚴格型別驗證：拒絕非 TextPart 或無效字典之物件 (避免無約束跳脫門)."""
+    from pydantic import ValidationError
+
+    # 1. 拒絕未宣告 type 或未知 type 之字典
+    with pytest.raises(ValidationError):
+        Message(role="user", parts=[{"type": "unsupported_blob", "data": "123"}])  # type: ignore
+
+    # 2. 拒絕缺少必要欄位之字典
+    with pytest.raises(ValidationError):
+        Message(role="user", parts=[{"type": "text"}])  # 缺少 text 欄位 # type: ignore
+
+    # 3. 拒絕隨機非結構化字串或純數字放入 parts
+    with pytest.raises(ValidationError):
+        Message(role="user", parts=["plain string not a part"])  # type: ignore

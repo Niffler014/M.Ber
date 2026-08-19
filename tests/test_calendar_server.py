@@ -1,4 +1,4 @@
-"""Unit Tests for JARVIS Calendar MCP Server (mcp_server/third_party/calendar_server.py).
+"""Unit Tests for M.Ber Calendar MCP Server (mcp_server/third_party/calendar_server.py).
 
 驗證項目：
 1. 強韌時間剖析器 (parse_flexible_datetime) 多格式解析

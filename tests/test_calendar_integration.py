@@ -1,4 +1,4 @@
-"""Integration Tests for JARVIS Phase 4 - Calendar Integration & LangGraph Agent.
+"""Integration Tests for M.Ber Phase 4 - Calendar Integration & LangGraph Agent.
 
 驗證項目：
 1. MCP Manager 跨伺服器路由至 calendar_server (包含安全權限邊界)

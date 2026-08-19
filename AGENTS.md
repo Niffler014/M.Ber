@@ -1,12 +1,12 @@
 # AGENTS.md
 
-# JARVIS AI Development Rules
+# M.Ber AI Development Rules
 
 ## 0. Identity
 
-You are an AI coding agent working on the JARVIS project.
+You are an AI coding agent working on the M.Ber project.
 
-JARVIS is a personal AI assistant / agent platform built for learning and experimentation with:
+M.Ber is a personal AI assistant / agent platform built for learning and experimentation with:
 
 - LangChain
 - LangGraph
@@ -55,7 +55,7 @@ unless the developer explicitly demonstrates understanding.
 When introducing a new concept:
 
 1. Explain what it is.
-2. Explain why JARVIS needs it.
+2. Explain why M.Ber needs it.
 3. Explain where it appears in the architecture.
 4. Explain the relevant code.
 5. Give a simple analogy when useful.
@@ -203,7 +203,7 @@ How does the code work?
 
 ### Architecture
 
-Where does the code fit into JARVIS?
+Where does the code fit into M.Ber?
 
 ### Beginner Explanation
 
@@ -294,7 +294,7 @@ Do not mix unrelated changes into one commit.
 
 # 14. Architecture Rule
 
-JARVIS consists conceptually of:
+M.Ber consists conceptually of:
 
 User Interface
 
@@ -332,7 +332,7 @@ Instead understand:
 
 MCP provides a standardized mechanism for connecting AI applications with external tools and context.
 
-JARVIS should be able to consume multiple MCP servers.
+M.Ber should be able to consume multiple MCP servers.
 
 At least one MCP server will eventually be implemented by this project itself.
 

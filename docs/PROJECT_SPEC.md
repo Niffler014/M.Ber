@@ -1,6 +1,6 @@
-# JARVIS — Personal AI Agent System
+# M.Ber — Personal AI Agent System
 
-**Project Status:** Phase 5 completed → Phase 6 preparation  
+**Project Status:** Phase 6 Minimal A2A 1.0 Interoperable Subset Completed  
 **Specification Version:** 0.5.0  
 **Project Type:** Personal AI Agent / Agentic System  
 **Primary Language:** Python  
@@ -16,9 +16,9 @@
 
 ## 1. Project Vision
 
-JARVIS 是一個以個人使用為核心的 AI Agent 系統。
+M.Ber 是一個以個人使用為核心的 AI Agent 系統。
 
-JARVIS 不只是聊天機器人，而是一個能夠：
+M.Ber 不只是聊天機器人，而是一個能夠：
 
 1. 理解使用者需求
 2. 分析任務
@@ -37,7 +37,7 @@ Project 的長期目標是建立一個具有可擴充性、可觀測性、可測
 
 ## 2. Core Design Philosophy
 
-JARVIS 遵循以下設計原則。
+M.Ber 遵循以下設計原則。
 
 ### 2.1 Agent First
 
@@ -56,7 +56,7 @@ UI 可以更換，但 Agent Core 不應依賴特定 UI。
 - MCP：Agent 與 Tools / Resources / External Services 的連接
 - A2A：Agent 與其他 Agent 的溝通與任務委派
 
-MCP 採用 Host / Client / Server 架構，因此 JARVIS 將扮演 MCP Host，並可管理多個 MCP Client / Server 連線。
+MCP 採用 Host / Client / Server 架構，因此 M.Ber 將扮演 MCP Host，並可管理多個 MCP Client / Server 連線。
 
 A2A 則用於獨立 Agent 之間的互操作與任務協作。A2A 1.0 將 Agent Card、Task、Message、Artifact 等概念標準化。
 
@@ -106,7 +106,7 @@ AI 協助開發時，所有程式碼修改都必須留下可理解的紀錄。
 禁止：
 
 ```text
-一次建立完整 JARVIS
+一次建立完整 M.Ber
 ```
 
 改採：
@@ -134,12 +134,12 @@ Foundation
                            │
                            ▼
                     ┌─────────────┐
-                    │ JARVIS UI   │
+                    │  M.Ber UI   │
                     └──────┬──────┘
                            │
                            ▼
                 ┌────────────────────┐
-                │ JARVIS Orchestrator│
+                │ M.Ber Orchestrator │
                 │     LangGraph      │
                 └─────────┬──────────┘
                           │
@@ -217,7 +217,7 @@ Calendar Provider 將透過 Adapter / MCP 抽象化，不讓核心 Agent 直接�
 
 ### 4.4 MCP
 
-JARVIS 必須具備：
+M.Ber 必須具備：
 
 #### Own MCP
 
@@ -241,7 +241,7 @@ JARVIS 必須具備：
 
 ### 4.5 A2A
 
-JARVIS 必須具備：
+M.Ber 必須具備：
 
 - A2A Client capability
 - A2A Agent capability
@@ -256,7 +256,7 @@ A2A Agent Card 是 Agent 對外描述自身 identity、capabilities、skills、e
 
 ## 5. Agent Architecture
 
-JARVIS Core 預計包含：
+M.Ber Core 預計包含：
 
 ```text
 Intent
@@ -437,7 +437,7 @@ A2A
 Multi-Agent Orchestration
 
 ### Phase 8
-JARVIS User Interface
+M.Ber User Interface
 
 ### Phase 9
 Observability / Evaluation
@@ -449,7 +449,7 @@ Production Hardening
 
 ## 12. Non-Goals
 
-JARVIS 初期不追求：
+M.Ber 初期不追求：
 
 - 完美語音助手
 - 自主控制所有電腦功能

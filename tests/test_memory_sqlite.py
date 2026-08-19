@@ -1,4 +1,4 @@
-"""Integration Tests for JARVIS SQLite Memory Repository (Phase 5.1).
+"""Integration Tests for M.Ber SQLite Memory Repository (Phase 5.1).
 
 驗證項目：
 1. SQLite 資料庫檔案自動建表與索引建立

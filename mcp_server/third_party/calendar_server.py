@@ -1,4 +1,4 @@
-"""JARVIS Calendar MCP Server (第三方風格行事曆行程伺服器).
+"""M.Ber Calendar MCP Server (第三方風格行事曆行程伺服器).
 
 【新手教學 / 觀念解析】：
 1. 為什麼 Agent 需要獨立的 Calendar MCP Server？
@@ -27,7 +27,7 @@ from typing import Optional, List, Dict, Any
 from mcp.server import MCPServer
 
 # 建立獨立的 Calendar MCP Server 實例
-app = MCPServer("jarvis-calendar-server")
+app = MCPServer("mber-calendar-server")
 
 # 資料庫路徑 (儲存於專案 data/calendar.db)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent

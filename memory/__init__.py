@@ -1,4 +1,4 @@
-"""JARVIS Memory Package (記憶管理子系統).
+"""M.Ber Memory Package (記憶子系統).
 
 提供領域實體、倉儲介面與記憶管理服務：
 - MemoryItem, MemoryType: 記憶領域模型與分類

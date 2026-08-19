@@ -1,4 +1,4 @@
-"""Unit Tests for JARVIS Phase 2 - Own MCP Server (my_mcp_server.py).
+"""Unit Tests for M.Ber Phase 2 - Own MCP Server (my_mcp_server.py).
 
 驗證項目：
 1. MCP Server 啟動與 stdio 連線
@@ -35,7 +35,7 @@ def test_mcp_server_call_get_current_time() -> None:
     client = MCPStdioClient()
     result = client.call_tool("get_current_time", {})
 
-    assert "[JARVIS MCP Time Tool]" in result
+    assert "[M.Ber MCP Time Tool]" in result
     # 驗證包含西元年份數字格式 (如 2026 或 202)
     assert "202" in result
 
@@ -43,8 +43,8 @@ def test_mcp_server_call_get_current_time() -> None:
 def test_mcp_server_call_echo_message() -> None:
     """測試呼叫 MCP Server 之 echo_message 工具與參數傳遞."""
     client = MCPStdioClient()
-    test_str = "JARVIS_PHASE_2_TEST_PAYLOAD"
+    test_str = "MBER_PHASE_2_TEST_PAYLOAD"
     result = client.call_tool("echo_message", {"message": test_str})
 
-    assert "[JARVIS MCP Echo Tool]" in result
+    assert "[M.Ber MCP Echo Tool]" in result
     assert test_str in result

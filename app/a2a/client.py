@@ -1,8 +1,8 @@
-"""JARVIS A2A Client (A2A 1.0.0 JSON-RPC 2.0 客戶端通訊模組).
+"""M.Ber A2A Client (A2A 1.0.0 JSON-RPC 2.0 客戶端通訊模組).
 
 【新手教學 / 觀念解析】：
 1. 什麼是 A2A Client？
-   - `A2AClient` 是 JARVIS 與外部 AI 代理人「交涉與發送任務」的通訊轉發窗口。
+   - `A2AClient` 是 M.Ber 與外部 AI 代理人「交涉與發送任務」的通訊轉發窗口。
    - 它遵循 A2A 1.0 規範，使用 **JSON-RPC 2.0** 協議將請求包裝成標準信封傳輸給遠端 Agent。
 
 2. 支援的標準方法 (Standard Methods)：
@@ -21,6 +21,7 @@ from app.a2a.models import (
     JSONRPCRequest,
     JSONRPCResponse,
     Message,
+    SendMessageResponse,
     Task,
     TextPart,
 )
@@ -68,7 +69,7 @@ class A2AClient:
             headers={
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-                "User-Agent": "JARVIS-A2A-Client/1.0",
+                "User-Agent": "M.Ber-A2A-Client/1.0",
             },
             method="POST",
         )
@@ -109,8 +110,10 @@ class A2AClient:
         message: Union[str, Message],
         task_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-    ) -> Task:
+    ) -> SendMessageResponse:
         """發送訊息/委派任務給遠端 Agent (呼叫 SendMessage 方法).
+
+        根據 A2A 1.0 規範，SendMessage 可回傳狀態化 Task 或直接 Message。
 
         Args:
             message: 文字訊息內容或完整 Message 物件
@@ -118,7 +121,7 @@ class A2AClient:
             metadata: 附加元數據
 
         Returns:
-            遠端 Agent 回傳之 Task 實體
+            遠端 Agent 回傳之 Task 或 Message 實體
         """
         if isinstance(message, str):
             msg_obj = Message(role="user", parts=[TextPart(text=message)])
@@ -129,14 +132,22 @@ class A2AClient:
             "message": msg_obj.model_dump(),
         }
         if task_id is not None:
-            params["task_id"] = task_id
+            params["taskId"] = task_id
         if metadata:
             params["metadata"] = metadata
 
         result = self._call_rpc("SendMessage", params)
         if isinstance(result, dict):
-            return Task.model_validate(result)
-        raise A2AClientError(f"無效的 Task 回傳格式: {type(result)}")
+            # A2A 1.0: 依據回傳結構判定為 Task 或 Message
+            if "status" in result or ("id" in result and "role" not in result):
+                return Task.model_validate(result)
+            elif "role" in result:
+                return Message.model_validate(result)
+            try:
+                return Task.model_validate(result)
+            except Exception:
+                return Message.model_validate(result)
+        raise A2AClientError(f"無效的 SendMessage 回傳格式: {type(result)}")
 
     def get_task(self, task_id: str) -> Task:
         """向遠端 Agent 查詢指定任務狀態與歷史 (呼叫 GetTask 方法).
@@ -150,7 +161,7 @@ class A2AClient:
         if not task_id or not task_id.strip():
             raise ValueError("task_id 不得為空白。")
 
-        result = self._call_rpc("GetTask", {"task_id": task_id.strip()})
+        result = self._call_rpc("GetTask", {"id": task_id.strip()})
         if isinstance(result, dict):
             return Task.model_validate(result)
         raise A2AClientError(f"無效的 Task 回傳格式: {type(result)}")
@@ -167,7 +178,7 @@ class A2AClient:
         if not task_id or not task_id.strip():
             raise ValueError("task_id 不得為空白。")
 
-        result = self._call_rpc("CancelTask", {"task_id": task_id.strip()})
+        result = self._call_rpc("CancelTask", {"id": task_id.strip()})
         if isinstance(result, dict):
             return Task.model_validate(result)
         raise A2AClientError(f"無效的 Task 回傳格式: {type(result)}")

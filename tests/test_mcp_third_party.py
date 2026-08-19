@@ -1,4 +1,4 @@
-"""Integration Tests for JARVIS Phase 3 - Third-party MCP Server (sqlite_server.py).
+"""Integration Tests for M.Ber Phase 3 - Third-party MCP Server (sqlite_server.py).
 
 驗證項目：
 1. 第三方 SQLite MCP Server 之筆記寫入與讀取

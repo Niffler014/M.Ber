@@ -1,4 +1,4 @@
-"""JARVIS Agent State Definition.
+"""M.Ber Agent State Definition.
 
 【新手教學 / 觀念解析】：
 1. 什麼是 State（狀態）？
@@ -25,7 +25,7 @@ from langgraph.graph.message import add_messages
 
 
 class AgentState(TypedDict):
-    """JARVIS Agent 核心狀態定義.
+    """M.Ber Agent 核心狀態定義.
 
     Attributes:
         messages: 儲存對話歷史訊息的清單。

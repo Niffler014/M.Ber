@@ -1,4 +1,4 @@
-"""JARVIS 自有 MCP 伺服器 (Own MCP Server).
+"""M.Ber 自有 MCP 伺服器 (Own MCP Server).
 
 【新手教學 / 觀念解析】：
 1. 什麼是 MCP Server？
@@ -19,8 +19,8 @@ from datetime import datetime
 import anyio
 from mcp.server import MCPServer
 
-# 建立 MCP Server 實例，宣告伺服器名稱為 jarvis-own-mcp-server
-app = MCPServer("jarvis-own-mcp-server")
+# 建立 MCP Server 實例，宣告伺服器名稱為 mber-own-mcp-server
+app = MCPServer("mber-own-mcp-server")
 
 
 @app.tool()
@@ -31,7 +31,7 @@ def get_current_time() -> str:
     無須傳入任何參數。
     """
     current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    return f"[JARVIS MCP Time Tool]: 目前系統時間為 {current_time_str}"
+    return f"[M.Ber MCP Time Tool]: 目前系統時間為 {current_time_str}"
 
 
 @app.tool()
@@ -43,7 +43,7 @@ def echo_message(message: str) -> str:
     Args:
         message: 要原樣回傳的文字訊息
     """
-    return f"[JARVIS MCP Echo Tool]: 收到回傳請求 -> '{message}'"
+    return f"[M.Ber MCP Echo Tool]: 收到回傳請求 -> '{message}'"
 
 
 def run_server() -> None:

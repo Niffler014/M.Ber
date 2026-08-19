@@ -1,4 +1,4 @@
-"""JARVIS Agent Nodes (工作節點模組).
+"""M.Ber Agent Nodes (工作節點模組).
 
 【新手教學 / 觀念解析】：
 1. 什麼是 Node（節點）？
@@ -74,7 +74,7 @@ def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[
     def agent_node(state: AgentState) -> Dict[str, List[BaseMessage]]:
         messages = list(state.get("messages", []))
         if not messages:
-            return {"messages": [AIMessage(content="您好！我是 JARVIS，請問有什麼我可以協助您的？")]}
+            return {"messages": [AIMessage(content="您好！我是 M.Ber，請問有什麼我可以協助您的？")]}
 
         # 若有注入真實 LLM，直接呼叫
         if llm is not None:
@@ -152,7 +152,7 @@ def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[
                                     "title": title,
                                     "start_time": start_dt.strftime("%Y-%m-%dT%H:%M:%S"),
                                     "end_time": end_dt.strftime("%Y-%m-%dT%H:%M:%S"),
-                                    "description": f"由 JARVIS 自動排程: {user_text}",
+                                    "description": f"由 M.Ber 自動排程: {user_text}",
                                 },
                             }
                         ],
@@ -323,7 +323,7 @@ def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[
         return {
             "messages": [
                 AIMessage(
-                    content=f"JARVIS 收到您的訊息：『{user_text}』。\n{system_time_ctx}\n我有行事曆行程管理、筆記資料庫、時間查詢等功能，請問需要為您做什麼？"
+                    content=f"M.Ber 收到您的訊息：『{user_text}』。\n{system_time_ctx}\n我有行事曆行程管理、筆記資料庫、時間查詢等功能，請問需要為您做什麼？"
                 )
             ]
         }

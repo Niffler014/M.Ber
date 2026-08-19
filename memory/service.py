@@ -1,4 +1,4 @@
-"""JARVIS Memory Service (記憶領域服務與門面).
+"""M.Ber Memory Service (記憶領域服務與門面).
 
 【新手教學 / 觀念解析】：
 1. 什麼是 MemoryService？

@@ -1,4 +1,4 @@
-"""Smoke tests for JARVIS Foundation (Phase 0).
+"""Smoke tests for M.Ber Foundation (Phase 0).
 
 Smoke tests are high-level, lightweight tests to verify that
 the basic environment, core packages, and project structure
@@ -28,7 +28,7 @@ def test_core_dependencies_import() -> None:
 
 
 def test_app_package_import() -> None:
-    """Verify that the JARVIS app package can be imported and has version info."""
+    """Verify that the M.Ber app package can be imported and has version info."""
     import app
 
     assert hasattr(app, "__version__"), "app package is missing __version__ attribute"

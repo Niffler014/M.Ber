@@ -1,8 +1,8 @@
-"""JARVIS MCP Manager (MCP 伺服器總管與多路由模組).
+"""M.Ber MCP Manager (MCP 伺服器總管與多路由模組).
 
 【新手教學 / 觀念解析】：
 1. 什麼是 MCP Manager？
-   - MCP Manager 是 JARVIS 的「多功能集線器（Hub）」。
+   - MCP Manager 是 M.Ber 的「多功能集線器（Hub）」。
    - 它負責：
      ① 讀取外部設定檔 `config/mcp_servers.json`。
      ② 依據設定，同時啟動並管理多個 MCP Server 子程序。
@@ -17,7 +17,7 @@
        "args": ["path/to/server.py"],
        "enabled": true
      }
-   - 重啟 JARVIS 後，Manager 會自動偵測並將新工具整合至 LangGraph Agent！
+   - 重啟 M.Ber 後，Manager 會自動偵測並將新工具整合至 LangGraph Agent！
 """
 
 import os

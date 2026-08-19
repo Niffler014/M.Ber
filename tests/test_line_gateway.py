@@ -1,4 +1,4 @@
-"""Unit Tests for JARVIS LINE Webhook Gateway (app/interfaces/line_gateway.py).
+"""Unit Tests for M.Ber LINE Webhook Gateway (app/interfaces/line_gateway.py).
 
 驗證項目：
 1. FastAPI 健康檢查端點 (GET /health)

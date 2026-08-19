@@ -1,4 +1,4 @@
-"""JARVIS LINE 通訊介面模組 (LINE Webhook Gateway).
+"""M.Ber LINE 通訊介面模組 (LINE Webhook Gateway).
 
 【新手教學 / 觀念解析】：
 1. 什麼是 LINE Webhook Gateway？
@@ -56,7 +56,7 @@ LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "MOCK_LINE_SECRET")
 
 # 建立 FastAPI 應用實例
 app = FastAPI(
-    title="JARVIS LINE Webhook Gateway",
+    title="M.Ber LINE Webhook Gateway",
     description="LINE Bot Webhook 與 LangGraph Agent 整合轉接閘道器",
     version="1.0.0",
 )
@@ -80,7 +80,7 @@ def health_check() -> Dict[str, Any]:
     """健康檢查端點."""
     return {
         "status": "healthy",
-        "service": "JARVIS LINE Webhook Gateway",
+        "service": "M.Ber LINE Webhook Gateway",
         "version": "1.0.0",
         "mcp_servers": list(mcp_manager.clients.keys()),
     }
@@ -140,13 +140,13 @@ async def callback(
                 messages = graph_result.get("messages", [])
 
                 # 提取最新一則 AIMessage 回覆文字
-                reply_text = "JARVIS 處理完成。"
+                reply_text = "M.Ber 處理完成。"
                 for msg in reversed(messages):
                     if isinstance(msg, AIMessage):
                         reply_text = msg.content
                         break
 
-                print(f"🤖 [JARVIS 產生回覆]: {reply_text}")
+                print(f"🤖 [M.Ber 產生回覆]: {reply_text}")
 
                 # 5. 透過 LINE Messaging API 發送回覆 (若非 Mock Token)
                 if LINE_CHANNEL_ACCESS_TOKEN and not LINE_CHANNEL_ACCESS_TOKEN.startswith("MOCK_"):

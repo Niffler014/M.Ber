@@ -1,1 +1,1 @@
-"""JARVIS test suite package."""
+"""M.Ber test suite package."""

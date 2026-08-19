@@ -1,4 +1,4 @@
-"""JARVIS Memory Repository Interface & In-Memory Implementation.
+"""M.Ber Memory Repository Interface & In-Memory Implementation.
 
 【新手教學 / 觀念解析】：
 1. 什麼是 Repository Pattern（倉儲模式）？

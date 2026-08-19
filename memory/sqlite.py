@@ -1,4 +1,4 @@
-"""JARVIS SQLite Memory Repository Implementation.
+"""M.Ber SQLite Memory Repository Implementation.
 
 【新手教學 / 觀念解析】：
 1. 為什麼把 SQLite 限制在 `sqlite.py` 裡？

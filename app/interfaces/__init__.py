@@ -1,4 +1,4 @@
-"""JARVIS Interfaces Package (UI & Gateway Integrations).
+"""M.Ber Interfaces Package (UI & Gateway Integrations).
 
 Contains adapters for LINE Webhook, CLI, and future Web UIs.
 """

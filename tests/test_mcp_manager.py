@@ -1,4 +1,4 @@
-"""Unit Tests for JARVIS Phase 3 - MCP Manager (app/mcp/manager.py).
+"""Unit Tests for M.Ber Phase 3 - MCP Manager (app/mcp/manager.py).
 
 驗證項目：
 1. 外部設定檔 (config/mcp_servers.json) 讀取與解析
@@ -36,7 +36,7 @@ def test_mcp_manager_multi_server_routing() -> None:
 
     # 1. 測試路由至 own_server
     time_res = manager.call_tool("get_current_time", {})
-    assert "[JARVIS MCP Time Tool]" in time_res
+    assert "[M.Ber MCP Time Tool]" in time_res
 
     # 2. 測試路由至 sqlite_server (唯讀查詢)
     read_res = manager.call_tool("read_notes", {"keyword": "test_non_existent_xyz"})

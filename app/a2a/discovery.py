@@ -1,8 +1,8 @@
-"""JARVIS A2A Agent Discovery Service (代理人發現與註冊服務).
+"""M.Ber A2A Agent Discovery Service (代理人發現與註冊服務).
 
 【新手教學 / 觀念解析】：
 1. 什麼是 Agent Discovery（代理人發現）？
-   - 就像瀏覽器透過 URL 找到網站、或是手機透過通訊錄找到聯絡人一樣，JARVIS 需要一套機制來「發現」周遭可用的其他 AI 代理人（Peer Agents）。
+   - 就像瀏覽器透過 URL 找到網站、或是手機透過通訊錄找到聯絡人一樣，M.Ber 需要一套機制來「發現」周遭可用的其他 AI 代理人（Peer Agents）。
    - 在 A2A 1.0 規範中：
      ① 遠端端點會在 `/.well-known/agent-card.json` 伺服其 Agent Card。
      ② 本地系統可透過設定檔（`config/a2a_agents.json`）預先登記已知的合作代理人。

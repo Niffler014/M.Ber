@@ -1,4 +1,4 @@
-"""JARVIS CLI Interactive Entrypoint (命令列互動式介面).
+"""M.Ber CLI Interactive Entrypoint (命令列互動式介面).
 
 【新手教學 / 觀念解析】：
 1. 如何執行 LangGraph？
@@ -15,9 +15,9 @@ from app.mcp.manager import MCPManager
 
 
 def run_cli() -> None:
-    """啟動 JARVIS 終端機對話互動介面 (已整合 Multi-Server MCP Manager)."""
+    """啟動 M.Ber 終端機對話互動介面 (已整合 Multi-Server MCP Manager)."""
     print("=" * 65)
-    print("🤖 JARVIS Phase 3: Third-Party MCP Integration & MCP Manager CLI")
+    print("🤖 M.Ber Personal AI Agent Platform CLI")
     print("=" * 65)
 
     # 1. 建立 MCP Manager 載入外部設定檔 (config/mcp_servers.json)
@@ -30,7 +30,7 @@ def run_cli() -> None:
     print(f"📦 [工具探索彙整]: 共發現 {len(tool_names)} 個工具 ➔ {tool_names}")
 
     print("-" * 65)
-    print("💡 提示：輸入訊息後按 Enter 即可與 JARVIS 對話。")
+    print("💡 提示：輸入訊息後按 Enter 即可與 M.Ber 對話。")
     print("💡 測試工具關鍵字：")
     print("   - 輸入「現在幾點」或「時間」➔ 呼叫 own_server 之 get_current_time")
     print("   - 輸入「幫我預約明天下午 3 點開會」➔ 呼叫 calendar_server 之 add_event")
@@ -51,14 +51,14 @@ def run_cli() -> None:
         try:
             user_input = input("\n👤 使用者: ").strip()
         except (KeyboardInterrupt, EOFError):
-            print("\n👋 收到中斷訊號，JARVIS 已安全退出。")
+            print("\n👋 收到中斷訊號，M.Ber 已安全退出。")
             break
 
         if not user_input:
             continue
 
         if user_input.lower() in ["exit", "quit", "q"]:
-            print("👋 再見！JARVIS 關閉中。")
+            print("👋 再見！M.Ber 關閉中。")
             break
 
         # 將使用者的輸入包裝成 HumanMessage 並加入對話歷史
@@ -93,7 +93,7 @@ def run_cli() -> None:
 
         # 取出最新的回覆呈現給使用者
         if chat_history and isinstance(chat_history[-1], AIMessage):
-            print(f"\n🤖 JARVIS: {chat_history[-1].content}")
+            print(f"\n🤖 M.Ber: {chat_history[-1].content}")
 
         print("-" * 60)
 

@@ -1,6 +1,6 @@
-# JARVIS — Personal AI Agent Platform
+# M.Ber — Personal AI Agent Platform
 
-> **Project Status:** Phase 5 completed → Phase 6 preparation  
+> **Project Status:** Phase 6 Minimal A2A 1.0 Interoperable Subset Completed  
 > **Version:** 0.5.0  
 > **Primary Language:** Python (>= 3.10)  
 > **Orchestration Runtime:** LangGraph  
@@ -10,9 +10,9 @@
 
 ## 1. Overview
 
-**JARVIS** 是一個以個人使用為核心的 Personal AI Agent 平台。
+**M.Ber** 是一個以個人使用為核心的 Personal AI Agent 平台。
 
-JARVIS 不僅僅是一個對話機器人，而是具備長期記憶、任務規劃、工具調用（Model Context Protocol）以及多代理人協作（Agent2Agent Protocol）能力的個人 AI 助理。
+M.Ber 不僅僅是一個對話機器人，而是具備長期記憶、任務規劃、工具調用（Model Context Protocol）以及多代理人協作（Agent2Agent Protocol）能力的個人 AI 助理。
 
 本專案的核心目標是：**在建構現代 AI Agent 系統的同時，透過可解釋的漸進式開發，讓開發者深刻理解每一行程式碼與背後架構原理。**
 
@@ -37,13 +37,14 @@ JARVIS 不僅僅是一個對話機器人，而是具備長期記憶、任務規�
 ├── CHANGELOG_AI.md          # AI 階段性變更與架構說明紀錄
 ├── README.md                # 專案介紹與使用說明
 ├── pyproject.toml           # Python 專案元數據、依賴套件與 pytest 配置
-├── app/                     # JARVIS 應用主程式模組
+├── app/                     # M.Ber 應用主程式模組
 │   ├── __init__.py
 │   ├── cli.py               # 終端機即時互動介面
+│   ├── a2a/                 # A2A 代理人互操作模組 (AgentCard, Discovery, Client)
 │   ├── agent/               # LangGraph 狀態圖、節點與路由定義
 │   ├── interfaces/          # 外部通訊轉接站 (LINE Webhook Gateway 等)
 │   └── mcp/                 # MCP 客戶端連線器與多伺服器總管 (MCPManager)
-├── config/                  # 外部 MCP 伺服器配置 (mcp_servers.json)
+├── config/                  # 外部 MCP / A2A 伺服器配置 (mcp_servers.json, a2a_agents.json)
 ├── data/                    # 本地資料庫目錄 (calendar.db、memory.db 等)
 ├── docs/                    # 專案文件與架構規格
 │   ├── PROJECT_SPEC.md      # 專案總體規格書
@@ -90,9 +91,9 @@ uv run python -m app.cli
   - [x] Special Detour: LINE Webhook Gateway x LangGraph
 - [x] **Phase 4: Calendar Integration** (已完成)
 - [x] **Phase 5: Memory** (已完成)
-- [ ] **Phase 6: A2A (Agent2Agent)** (Next / 準備中)
+- [x] **Phase 6: A2A (Agent2Agent) Minimal Interoperable Subset** (已完成)
 - [ ] **Phase 7: Multi-Agent Orchestration**
-- [ ] **Phase 8: JARVIS User Interface**
+- [ ] **Phase 8: M.Ber User Interface**
 - [ ] **Phase 9: Observability & Evaluation**
 - [ ] **Phase 10: Production Hardening**
 

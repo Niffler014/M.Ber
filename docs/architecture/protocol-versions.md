@@ -1,6 +1,6 @@
 # Protocol Versions
 
-This document records the protocol and SDK versions used by JARVIS.
+This document records the protocol and SDK versions used by M.Ber.
 
 The purpose of this document is to prevent AI coding agents from silently implementing an outdated tutorial or specification.
 

@@ -1,4 +1,4 @@
-"""JARVIS Agent Graph Construction (狀態圖建構模組).
+"""M.Ber Agent Graph Construction (狀態圖建構模組).
 
 【新手教學 / 觀念解析】：
 1. 什麼是 StateGraph？
@@ -60,7 +60,7 @@ def create_agent_graph(
     mcp_manager: Optional[MCPManager] = None,
     checkpointer: Optional[Any] = None,
 ) -> CompiledStateGraph:
-    """建立並編譯 JARVIS Agent State Graph.
+    """建立並編譯 M.Ber Agent State Graph.
 
     此函式負責組裝 State、Nodes 與 Edges，並將其編譯為可執行的 CompiledStateGraph。
 

@@ -1,4 +1,4 @@
-"""JARVIS Agent Core Module.
+"""M.Ber Agent Core Module.
 
 Phase 1 - Basic LangGraph Agent
 """

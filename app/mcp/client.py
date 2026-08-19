@@ -1,4 +1,4 @@
-"""JARVIS MCP Stdio Client (MCP 客戶端連接器).
+"""M.Ber MCP Stdio Client (MCP 客戶端連接器).
 
 【新手教學 / 觀念解析】：
 1. 什麼是 MCP Client？

@@ -1,4 +1,4 @@
-"""JARVIS Own MCP Server Package.
+"""M.Ber Own MCP Server Package.
 
 Phase 2 - Own MCP Server
 """

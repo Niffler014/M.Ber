@@ -1,4 +1,4 @@
-"""JARVIS Memory Domain Models (記憶領域資料模型).
+"""M.Ber Memory Domain Models (記憶領域模型).
 
 【新手教學 / 觀念解析】：
 1. 為什麼 Agent 需要「記憶模型（Memory Model）」？

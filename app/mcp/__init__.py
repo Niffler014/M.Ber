@@ -1,4 +1,4 @@
-"""JARVIS MCP Package.
+"""M.Ber MCP Package.
 
 Phase 3 - Multi-server MCP Manager & Stdio Client
 """

@@ -1,4 +1,4 @@
-"""Integration Tests for JARVIS Phase 2 - LangGraph Agent + MCP Server.
+"""Integration Tests for M.Ber Phase 2 - LangGraph Agent + MCP Server.
 
 驗證項目：
 1. LangGraph Agent 透過 MCPStdioClient 調用自製 MCP Server 之 get_current_time
@@ -33,7 +33,7 @@ def test_agent_graph_with_mcp_get_current_time() -> None:
 
     # 驗證 ToolMessage 由真實 MCP Server 產出
     assert isinstance(messages[2], ToolMessage)
-    assert "[JARVIS MCP Time Tool]" in messages[2].content
+    assert "[M.Ber MCP Time Tool]" in messages[2].content
 
     # 驗證最終 Agent 回覆
     assert isinstance(messages[3], AIMessage)
@@ -54,5 +54,5 @@ def test_agent_graph_with_mcp_echo_message() -> None:
 
     assert len(messages) >= 4
     assert isinstance(messages[2], ToolMessage)
-    assert "[JARVIS MCP Echo Tool]" in messages[2].content
+    assert "[M.Ber MCP Echo Tool]" in messages[2].content
     assert "測試連線中" in messages[2].content

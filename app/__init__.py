@@ -1,4 +1,4 @@
-"""JARVIS application package.
+"""M.Ber application package.
 Phase 0 - Foundation
 """
 
