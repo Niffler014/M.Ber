@@ -16,19 +16,20 @@
 from typing import Any, Dict, List, Optional, Union
 from memory.models import MemoryItem, MemoryType
 from memory.repository import MemoryRepository
-from memory.sqlite import SQLiteMemoryRepository
 
 
 class MemoryService:
     """記憶高階領域服務類別."""
 
-    def __init__(self, repository: Optional[MemoryRepository] = None) -> None:
+    def __init__(self, repository: MemoryRepository) -> None:
         """初始化 MemoryService.
 
         Args:
-            repository: 記憶倉儲實例 (預設使用 SQLiteMemoryRepository)
+            repository: 記憶倉儲實例 (遵循 MemoryRepository 抽象合約)
         """
-        self.repository: MemoryRepository = repository or SQLiteMemoryRepository()
+        if repository is None:
+            raise ValueError("repository 必須為有效的 MemoryRepository 實例。")
+        self.repository: MemoryRepository = repository
 
     def remember(
         self,

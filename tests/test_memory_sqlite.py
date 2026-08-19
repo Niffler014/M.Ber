@@ -13,6 +13,7 @@ import pytest
 from memory.models import MemoryItem, MemoryType
 from memory.sqlite import SQLiteMemoryRepository
 from memory.service import MemoryService
+from memory import get_default_memory_service
 
 
 def test_sqlite_repository_crud_flow(tmp_path: Path) -> None:
@@ -72,3 +73,17 @@ def test_memory_service_with_sqlite_integration(tmp_path: Path) -> None:
     res = service.search(query="繁體中文")
     assert len(res) == 1
     assert res[0].memory_type == MemoryType.USER_PREFERENCE
+
+
+def test_get_default_memory_service(tmp_path: Path) -> None:
+    """測試 Composition Root 提供的 get_default_memory_service 工廠函式."""
+    db_file = str(tmp_path / "factory_memory.db")
+    service = get_default_memory_service(db_path=db_file)
+
+    assert isinstance(service, MemoryService)
+    assert isinstance(service.repository, SQLiteMemoryRepository)
+
+    saved = service.remember("工廠組裝測試記憶", memory_type="general")
+    assert saved.id is not None
+    assert service.recall(saved.id) is not None
+

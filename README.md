@@ -1,6 +1,6 @@
 # JARVIS — Personal AI Agent Platform
 
-> **Project Status:** Phase 4 completed → Phase 5 preparation  
+> **Project Status:** Phase 5 completed → Phase 6 preparation  
 > **Version:** 0.5.0  
 > **Primary Language:** Python (>= 3.10)  
 > **Orchestration Runtime:** LangGraph  
@@ -44,7 +44,7 @@ JARVIS 不僅僅是一個對話機器人，而是具備長期記憶、任務規�
 │   ├── interfaces/          # 外部通訊轉接站 (LINE Webhook Gateway 等)
 │   └── mcp/                 # MCP 客戶端連線器與多伺服器總管 (MCPManager)
 ├── config/                  # 外部 MCP 伺服器配置 (mcp_servers.json)
-├── data/                    # 本地資料庫目錄 (calendar.db 等)
+├── data/                    # 本地資料庫目錄 (calendar.db、memory.db 等)
 ├── docs/                    # 專案文件與架構規格
 │   ├── PROJECT_SPEC.md      # 專案總體規格書
 │   ├── architecture/        # 架構與協定版本紀錄 (protocol-versions.md)
@@ -52,7 +52,7 @@ JARVIS 不僅僅是一個對話機器人，而是具備長期記憶、任務規�
 ├── mcp_server/              # 本地與第三方風格 MCP 伺服器模組
 │   ├── my_mcp_server.py     # 自有時間與回音伺服器 (Phase 2)
 │   └── third_party/         # SQLite 筆記與行事曆伺服器 (Phase 3, Phase 4)
-├── memory/                  # 記憶管理模組 (Phase 5 預備)
+├── memory/                  # 記憶管理子系統 (Phase 5 完成)
 ├── services/                # 外部服務整合模組 (未來階段預備)
 └── tests/                   # 自動化測試套件 (單元與整合測試)
 ```
@@ -89,8 +89,8 @@ uv run python -m app.cli
 - [x] **Phase 3: Third-party MCP Integration** (已完成)
   - [x] Special Detour: LINE Webhook Gateway x LangGraph
 - [x] **Phase 4: Calendar Integration** (已完成)
-- [ ] **Phase 5: Memory** (Next / 準備中)
-- [ ] **Phase 6: A2A (Agent2Agent)**
+- [x] **Phase 5: Memory** (已完成)
+- [ ] **Phase 6: A2A (Agent2Agent)** (Next / 準備中)
 - [ ] **Phase 7: Multi-Agent Orchestration**
 - [ ] **Phase 8: JARVIS User Interface**
 - [ ] **Phase 9: Observability & Evaluation**

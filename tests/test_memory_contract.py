@@ -46,7 +46,10 @@ def test_memory_service_remember_and_recall() -> None:
 
 
 def test_memory_service_validation() -> None:
-    """測試空白記憶內容防護."""
+    """測試空白記憶內容防護與倉儲依賴注入防護."""
+    with pytest.raises(ValueError, match="repository 必須為有效的 MemoryRepository 實例"):
+        MemoryService(repository=None)  # type: ignore[arg-type]
+
     repo = InMemoryMemoryRepository()
     service = MemoryService(repository=repo)
 
@@ -55,6 +58,21 @@ def test_memory_service_validation() -> None:
 
     with pytest.raises(ValueError, match="記憶內容不得為空白"):
         service.remember("   ")
+
+
+def test_memory_service_decoupled_from_sqlite() -> None:
+    """測試 MemoryService 模組中絕不直接依賴或匯入 SQLite 具體實作 (Dependency Inversion)."""
+    import inspect
+    import memory.service as mem_svc_mod
+
+    # 1. 靜態檢查 memory.service 模組命名空間中不得存在 SQLite 相關類別
+    assert "SQLiteMemoryRepository" not in dir(mem_svc_mod)
+    assert "sqlite3" not in dir(mem_svc_mod)
+
+    # 2. 檢視源始碼確保無 memory.sqlite 相關匯入
+    source = inspect.getsource(mem_svc_mod)
+    assert "memory.sqlite" not in source
+    assert "SQLiteMemoryRepository" not in source
 
 
 def test_memory_service_search_and_filtering() -> None:

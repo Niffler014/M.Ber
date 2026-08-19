@@ -98,7 +98,7 @@ The project is developed incrementally.
 
 Current Phase:
 
-Phase 4 completed → Phase 5 preparation
+Phase 5 completed → Phase 6 preparation
 
 Do not implement future-phase features unless explicitly requested.
 
@@ -106,12 +106,11 @@ Examples:
 
 Do NOT implement:
 
-- Long-term memory storage, vector stores, or retrieval systems
-- A2A server / agent cards
+- A2A server / agent cards / agent discovery
 - Multi-agent orchestration
 - Web UI frontend
 
-during Phase 4.5 / Phase 5 preparation unless specifically requested.
+during Phase 5.5 / Phase 6 preparation unless specifically requested.
 
 ---
 
