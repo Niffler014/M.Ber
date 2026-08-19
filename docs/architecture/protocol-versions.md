@@ -41,27 +41,31 @@ https://modelcontextprotocol.io/specification/
 
 ### Current Project Status
 
-A2A integration has not yet been implemented (Planned for Phase 6).
-
-### Current Official Major Version
-
-A2A 1.0.0
+Phase 6: Minimal A2A 1.0 Interoperable Subset implemented in `app/a2a/`.
 
 ### Reference
 
+Official specification:
 https://a2a-protocol.org/latest/
 
-### Required Record
+### Recorded Configuration (Phase 6 Minimal Subset)
 
-When A2A implementation begins, record:
-
-- A2A specification version
-- A2A SDK
-- SDK version
-- Transport
-- Agent Card format
-- Authentication mechanism
-- Compatibility notes
+- **A2A Specification Version**: 1.0.0
+- **Transport**: JSON-RPC 2.0 over HTTP POST (Standard Methods: `SendMessage`, `GetTask`, `CancelTask`)
+- **Discovery Endpoint**: `/.well-known/agent-card.json` (with `agent.json` alias fallback)
+- **Agent Card Format**: Official A2A 1.0 `AgentCard` schema (`name`, `description`, `url`, `version`, `capabilities`, `skills`, `default_input_modes`, `default_output_modes`, `security_schemes`, `security`)
+- **Core Entities**:
+  - `AgentCard` & `AgentSkill`
+  - `Message` (containing `TextPart` parts)
+  - `Task` & `TaskStatus` (`submitted`, `working`, `input_required`, `completed`, `failed`, `canceled`)
+  - `Artifact` (composed of content parts)
+- **Authentication**: OpenAPI-compatible `security_schemes` declaration (infrastructure deferred)
+- **Minimal Scope Boundaries**:
+  - Excluded in Phase 6: Streaming (SSE), push notifications, OAuth servers, distributed registries, multi-agent orchestration.
+- **Compatibility Notes**:
+  - Implemented with Pydantic v2 domain validation models in `app/a2a/models.py`.
+  - JSON-RPC 2.0 wire envelopes in `app/a2a/client.py`.
+  - Static configuration discovery in `app/a2a/discovery.py` reading `config/a2a_agents.json`.
 
 ---
 
