@@ -1,7 +1,7 @@
 # M.Ber — Personal AI Agent System
 
-**Project Status:** Phase 6 Minimal A2A 1.0 Interoperable Subset Completed  
-**Specification Version:** 0.5.0  
+**Project Status:** Phase 7 Multi-Agent & Tool Orchestration Layer Completed  
+**Specification Version:** 0.7.0  
 **Project Type:** Personal AI Agent / Agentic System  
 **Primary Language:** Python  
 **Primary Orchestration Framework:** LangGraph  

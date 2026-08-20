@@ -88,6 +88,17 @@ class MCPStdioClient:
 
     def list_tools(self) -> List[Dict[str, Any]]:
         """同步向 MCP Server 取得工具清單 (提供給同步流程使用)."""
+        import asyncio
+        import concurrent.futures
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(anyio.run, self.list_tools_async).result()
         return anyio.run(self.list_tools_async)
 
     async def call_tool_async(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> str:
@@ -112,4 +123,15 @@ class MCPStdioClient:
 
     def call_tool(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> str:
         """同步呼叫 MCP Server 上的指定工具 (提供給 LangGraph 節點使用)."""
+        import asyncio
+        import concurrent.futures
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(anyio.run, self.call_tool_async, name, arguments).result()
         return anyio.run(self.call_tool_async, name, arguments)

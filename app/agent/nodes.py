@@ -70,27 +70,19 @@ def dummy_tool(tool_name: str, args: Dict[str, Any]) -> str:
 def create_agent_node(
     llm: Optional[Any] = None,
     a2a_delegator: Optional[A2ADelegator] = None,
+    orchestration_service: Optional[Any] = None,
 ) -> Callable[[AgentState], Dict[str, List[BaseMessage]]]:
-    """建立 Agent 思考節點 (支援時間/時區注入、A2A 代理委派與 MCP 工具意圖決策).
+    """建立 Agent 思考與調度節點 (Phase 7 Single Routing Authority).
 
-    支援注入真實 LLM 或使用內建模擬器（分析使用者訊息發起 MCP 工具調用或 A2A 委派）。
+    若傳入 orchestration_service，頂層請求由 Planner 進行唯一路由與調度執行。
     """
     def agent_node(state: AgentState) -> Dict[str, List[BaseMessage]]:
         messages = list(state.get("messages", []))
         if not messages:
             return {"messages": [AIMessage(content="您好！我是 M.Ber，請問有什麼我可以協助您的？")]}
 
-        # 若有注入真實 LLM，直接呼叫
-        if llm is not None:
-            response = llm.invoke(messages)
-            if not isinstance(response, BaseMessage):
-                response = AIMessage(content=str(response))
-            return {"messages": [response]}
-
-        # --- 確定性模擬器 (Fallback / Demo 模式) ---
+        # 情況 A：若前一則訊息是 ToolMessage (相容舊版工具流)
         last_msg = messages[-1]
-
-        # 情況 A：工具執行結果已傳回，大腦統整回覆
         if isinstance(last_msg, ToolMessage):
             tool_output = last_msg.content
             return {
@@ -100,6 +92,18 @@ def create_agent_node(
                     )
                 ]
             }
+
+        # 情況 B：使用 Phase 7 單一調度中樞 (Single Routing Authority)
+        if orchestration_service is not None:
+            ai_msg = orchestration_service.invoke(messages)
+            return {"messages": [ai_msg]}
+
+        # 若有注入真實 LLM，直接呼叫 (純 LLM fallback)
+        if llm is not None:
+            response = llm.invoke(messages)
+            if not isinstance(response, BaseMessage):
+                response = AIMessage(content=str(response))
+            return {"messages": [response]}
 
         user_text = last_msg.content if isinstance(last_msg.content, str) else str(last_msg.content)
         user_text_lower = user_text.lower()

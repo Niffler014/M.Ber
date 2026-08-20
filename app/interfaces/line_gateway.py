@@ -67,7 +67,11 @@ checkpointer = MemorySaver()
 
 # 2. 建立 MCP Manager 與 LangGraph 狀態圖實例
 mcp_manager = MCPManager()
-agent_graph = create_agent_graph(mcp_manager=mcp_manager, checkpointer=checkpointer)
+agent_graph = create_agent_graph(
+    mcp_manager=mcp_manager,
+    checkpointer=checkpointer,
+    use_orchestration=True,
+)
 
 # 3. 初始化 LINE SDK 處理器
 parser = WebhookParser(LINE_CHANNEL_SECRET)

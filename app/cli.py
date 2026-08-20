@@ -59,10 +59,11 @@ def run_cli() -> None:
     print("   - 輸入「exit」或「quit」即可退出程式。")
     print("-" * 65)
 
-    # 建立編譯好的狀態圖 (注入 mcp_manager 與 a2a_delegator)
+    # 建立編譯好的狀態圖 (注入 mcp_manager 與 a2a_delegator，啟用 Phase 7 Orchestration)
     graph = create_agent_graph(
         mcp_manager=mcp_manager,
         a2a_delegator=a2a_delegator,
+        use_orchestration=True,
     )
 
     # 維護多輪對話歷史 (Session Messages)
