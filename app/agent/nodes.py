@@ -25,6 +25,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMe
 from app.agent.state import AgentState
 from app.mcp.client import MCPStdioClient
 from app.mcp.manager import MCPManager
+from app.a2a.delegator import A2ADelegator
 
 
 def get_system_context() -> str:
@@ -66,10 +67,13 @@ def dummy_tool(tool_name: str, args: Dict[str, Any]) -> str:
         return f"[Fallback Echo]: 收到工具請求 '{tool_name}'，參數為: {query}"
 
 
-def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[str, List[BaseMessage]]]:
-    """建立 Agent 思考節點 (支援時間/時區注入與 MCP 工具意圖決策).
+def create_agent_node(
+    llm: Optional[Any] = None,
+    a2a_delegator: Optional[A2ADelegator] = None,
+) -> Callable[[AgentState], Dict[str, List[BaseMessage]]]:
+    """建立 Agent 思考節點 (支援時間/時區注入、A2A 代理委派與 MCP 工具意圖決策).
 
-    支援注入真實 LLM 或使用內建模擬器（分析使用者訊息發起 MCP 工具調用）。
+    支援注入真實 LLM 或使用內建模擬器（分析使用者訊息發起 MCP 工具調用或 A2A 委派）。
     """
     def agent_node(state: AgentState) -> Dict[str, List[BaseMessage]]:
         messages = list(state.get("messages", []))
@@ -100,6 +104,16 @@ def create_agent_node(llm: Optional[Any] = None) -> Callable[[AgentState], Dict[
         user_text = last_msg.content if isinstance(last_msg.content, str) else str(last_msg.content)
         user_text_lower = user_text.lower()
         now = datetime.now()
+
+        # 情況 B：檢查是否有已註冊 Peer Agent 具備對應技能宣告可承接任務 (A2A 委派)
+        if a2a_delegator is not None:
+            delegation_result = a2a_delegator.match_and_delegate(user_text)
+            if delegation_result is not None:
+                return {
+                    "messages": [
+                        AIMessage(content=delegation_result)
+                    ]
+                }
 
         # ==========================================
         # 1. 檢查是否觸發行事曆新增行程 (add_event)

@@ -14,9 +14,15 @@
 """
 
 import json
+import urllib.request
+import urllib.error
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from app.a2a.models import AgentCard, AgentSkill
+
+
+# 定義用於探索端點之 Transport 型別 (供注入與測試)
+CardTransportHandler = Callable[[str], Union[str, Dict[str, Any]]]
 
 
 class AgentDiscoveryService:
@@ -32,6 +38,7 @@ class AgentDiscoveryService:
             config_path: a2a_agents.json 設定檔路徑（若無指定則預設尋找 config/a2a_agents.json）
         """
         self._registry: Dict[str, AgentCard] = {}
+        self._peers: List[Dict[str, str]] = []
 
         project_root = Path(__file__).resolve().parent.parent.parent
         if config_path is None:
@@ -41,15 +48,28 @@ class AgentDiscoveryService:
         # 啟動時自動載入設定檔
         self.reload()
 
+    @property
+    def configured_peers(self) -> List[Dict[str, str]]:
+        """取得設定檔中已登記的外部 Peer 端點清單 (僅記錄位置 WHERE)."""
+        return list(self._peers)
+
     def reload(self) -> None:
         """重新讀取設定檔並更新代理人註冊表."""
         self._registry.clear()
+        self._peers.clear()
         if not self.config_path.exists():
             return
 
         try:
             raw_text = self.config_path.read_text(encoding="utf-8")
             data = json.loads(raw_text)
+
+            # 1. 載入外部 Peer 端點宣告 (僅包含名稱與 URL，不含 Agent Card 內容)
+            peers_data = data.get("peers", [])
+            if isinstance(peers_data, list):
+                self._peers = [p for p in peers_data if isinstance(p, dict) and "url" in p]
+
+            # 2. 載入靜態/本地已知代理人卡片 (若有)
             agents_data = data.get("agents", [])
             if isinstance(agents_data, dict):
                 agents_data = list(agents_data.values())
@@ -119,6 +139,42 @@ class AgentDiscoveryService:
                     return card
         return None
 
+    def find_agent_for_query(self, query: str) -> Optional[Tuple[AgentCard, AgentSkill]]:
+        """確定性 MVP 技能匹配：根據使用者輸入字串與已註冊代理人之技能宣告進行判定.
+
+        【架構說明】：
+        此為 Phase 6 的確定性技能比對 MVP 實作，直接依據 AgentCard 中聲明的
+        tags、examples、skill id 與 name 進行匹配。
+        未來在更進階的架構中，此處可抽換為 LLM Intent Router，而無需變更 A2A 協定底層。
+
+        Args:
+            query: 使用者輸入之自然語言訊息
+
+        Returns:
+            匹配之 (AgentCard, AgentSkill) 二元組，若無匹配則回傳 None
+        """
+        q_lower = query.lower().strip()
+        for card in self._registry.values():
+            for skill in card.skills:
+                # 1. 檢查技能 ID 與名稱
+                if skill.id.lower() in q_lower or skill.name.lower() in q_lower:
+                    return card, skill
+
+                # 2. 檢查技能標籤 (Tags)
+                for tag in skill.tags:
+                    tag_clean = tag.lower().strip().replace("_", " ")
+                    if tag_clean and (tag_clean in q_lower or tag.lower() in q_lower):
+                        return card, skill
+
+                # 3. 檢查範例 (Examples)
+                for ex in skill.examples:
+                    ex_clean = ex.lower().strip()
+                    # 若使用者輸入與範例有顯著交集關鍵字
+                    if any(part in q_lower for part in ex_clean.split() if len(part) >= 2):
+                        return card, skill
+
+        return None
+
     @classmethod
     def get_well_known_endpoint(cls, base_url: str) -> str:
         """組合標準 A2A Well-Known Agent Card 探索路徑.
@@ -131,3 +187,87 @@ class AgentDiscoveryService:
         """
         clean_url = base_url.rstrip("/")
         return f"{clean_url}{cls.WELL_KNOWN_CARD_PATH}"
+
+    @classmethod
+    def fetch_agent_card(
+        cls,
+        endpoint_url: str,
+        transport: Optional[CardTransportHandler] = None,
+        timeout: float = 10.0,
+    ) -> AgentCard:
+        """從遠端端點獲取權威 Agent Card (/.well-known/agent-card.json).
+
+        Args:
+            endpoint_url: 遠端伺服器基底 URL 或完整 card URL
+            transport: 自訂傳輸函式 (若為 None 則使用 urllib HTTP GET)
+            timeout: 連線超時秒數
+
+        Returns:
+            解析並驗證通過之 AgentCard 實體
+        """
+        if endpoint_url.endswith(".json"):
+            card_url = endpoint_url
+        else:
+            card_url = cls.get_well_known_endpoint(endpoint_url)
+
+        if transport is not None:
+            raw_data = transport(card_url)
+            return cls.parse_agent_card(raw_data)
+
+        req = urllib.request.Request(
+            url=card_url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "M.Ber-A2A-Discovery/1.0",
+            },
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                content = resp.read().decode("utf-8")
+                return cls.parse_agent_card(content)
+        except Exception as e:
+            raise RuntimeError(f"無法從 '{card_url}' 取得 Agent Card: {e}") from e
+
+    def discover_peer(
+        self,
+        endpoint_url: str,
+        transport: Optional[CardTransportHandler] = None,
+        timeout: float = 10.0,
+    ) -> AgentCard:
+        """動態探索外部 Peer 代理人並註冊至註冊表.
+
+        Args:
+            endpoint_url: 外部代理人端點位置 (WHERE)
+            transport: 傳輸函式 (可選，供測試注入)
+            timeout: 超時秒數
+
+        Returns:
+            權威 AgentCard 實體
+        """
+        card = self.fetch_agent_card(endpoint_url, transport=transport, timeout=timeout)
+        self.register_agent(card)
+        return card
+
+    def discover_configured_peers(
+        self,
+        transport: Optional[CardTransportHandler] = None,
+        timeout: float = 10.0,
+    ) -> List[AgentCard]:
+        """批量探索設定檔中登記的所有 external peers.
+
+        Returns:
+            成功探索之 AgentCard 清單
+        """
+        discovered: List[AgentCard] = []
+        for peer in self._peers:
+            url = peer.get("url")
+            if not url:
+                continue
+            try:
+                card = self.discover_peer(url, transport=transport, timeout=timeout)
+                discovered.append(card)
+            except Exception as e:
+                print(f"⚠️ [A2A Discovery] 自動探索 Peer 失敗 ({peer.get('name', url)}): {e}")
+        return discovered
+

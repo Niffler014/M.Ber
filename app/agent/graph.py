@@ -25,6 +25,7 @@ from app.agent.state import AgentState
 from app.agent.nodes import create_agent_node, create_tools_node, tools_node
 from app.mcp.client import MCPStdioClient
 from app.mcp.manager import MCPManager
+from app.a2a.delegator import A2ADelegator
 
 
 def should_continue(state: AgentState) -> Literal["tools", "__end__"]:
@@ -58,6 +59,7 @@ def create_agent_graph(
     llm: Optional[Any] = None,
     mcp_client: Optional[Union[MCPManager, MCPStdioClient]] = None,
     mcp_manager: Optional[MCPManager] = None,
+    a2a_delegator: Optional[A2ADelegator] = None,
     checkpointer: Optional[Any] = None,
 ) -> CompiledStateGraph:
     """建立並編譯 M.Ber Agent State Graph.
@@ -73,6 +75,7 @@ def create_agent_graph(
         llm: 自訂的 LLM 模型實例（可選，若無則使用內建模擬器）
         mcp_client: 單一 MCP Stdio 客戶端實例（可選）
         mcp_manager: MCP 伺服器總管實例（可選，推薦使用，支援多 Server 路由）
+        a2a_delegator: A2A 任務委派調度器（可選，支援外部 Peer Agent 技能委派）
         checkpointer: 狀態檢查點管理器（例如 MemorySaver，支援基於 thread_id 的對話記憶隔離）
 
     Returns:
@@ -82,7 +85,7 @@ def create_agent_graph(
 
     builder = StateGraph(AgentState)
 
-    agent_node_fn = create_agent_node(llm)
+    agent_node_fn = create_agent_node(llm, a2a_delegator=a2a_delegator)
     tools_node_fn = create_tools_node(provider)
 
     builder.add_node("agent", agent_node_fn)

@@ -25,8 +25,9 @@ from app.a2a.models import (
     TaskStatus,
     TextPart,
 )
-from app.a2a.discovery import AgentDiscoveryService
-from app.a2a.client import A2AClient, A2AClientError
+from app.a2a.discovery import AgentDiscoveryService, CardTransportHandler
+from app.a2a.client import A2AClient, A2AClientError, TransportHandler
+from app.a2a.delegator import A2ADelegator
 
 __all__ = [
     "AgentCapabilities",
@@ -44,6 +45,9 @@ __all__ = [
     "TaskStatus",
     "TextPart",
     "AgentDiscoveryService",
+    "CardTransportHandler",
     "A2AClient",
     "A2AClientError",
+    "TransportHandler",
+    "A2ADelegator",
 ]

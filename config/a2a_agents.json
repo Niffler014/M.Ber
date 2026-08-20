@@ -1,4 +1,10 @@
 {
+  "peers": [
+    {
+      "name": "PCforge",
+      "url": "http://localhost:8001"
+    }
+  ],
   "agents": [
     {
       "name": "ResearchAgent",
