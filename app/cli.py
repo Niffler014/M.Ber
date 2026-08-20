@@ -12,10 +12,12 @@ import sys
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from app.agent.graph import create_agent_graph
 from app.mcp.manager import MCPManager
+from app.a2a.discovery import AgentDiscoveryService
+from app.a2a.delegator import A2ADelegator
 
 
 def run_cli() -> None:
-    """啟動 M.Ber 終端機對話互動介面 (已整合 Multi-Server MCP Manager)."""
+    """啟動 M.Ber 終端機對話互動介面 (已整合 Multi-Server MCP Manager 與 A2A 代理人委派)."""
     print("=" * 65)
     print("🤖 M.Ber Personal AI Agent Platform CLI")
     print("=" * 65)
@@ -29,20 +31,39 @@ def run_cli() -> None:
     print(f"🔌 [MCP Manager 啟動成功]: 已連線伺服器清單: {connected_servers}")
     print(f"📦 [工具探索彙整]: 共發現 {len(tool_names)} 個工具 ➔ {tool_names}")
 
+    # 2. 建立 A2A Discovery Service 並動態探索外部 Peer Agents (config/a2a_agents.json)
+    discovery_service = AgentDiscoveryService()
+    try:
+        discovered_cards = discovery_service.discover_configured_peers()
+        discovered_names = [c.name for c in discovered_cards]
+        if discovered_names:
+            print(f"🤝 [A2A Discovery]: discovered agents: {discovered_names}")
+        elif discovery_service.configured_peers:
+            peer_names = [p.get("name", p.get("url")) for p in discovery_service.configured_peers]
+            print(f"⚠️ [A2A Discovery]: {', '.join(peer_names)} unavailable")
+    except Exception as e:
+        print(f"⚠️ [A2A Discovery]: 探索外部代理人失敗: {e}")
+
+    a2a_delegator = A2ADelegator(discovery_service=discovery_service)
+
     print("-" * 65)
     print("💡 提示：輸入訊息後按 Enter 即可與 M.Ber 對話。")
-    print("💡 測試工具關鍵字：")
+    print("💡 測試工具與 A2A 委派關鍵字：")
     print("   - 輸入「現在幾點」或「時間」➔ 呼叫 own_server 之 get_current_time")
     print("   - 輸入「幫我預約明天下午 3 點開會」➔ 呼叫 calendar_server 之 add_event")
     print("   - 輸入「查詢明天的行程」或「查看行事曆」➔ 呼叫 calendar_server 之 query_events")
     print("   - 輸入「新增筆記：標題=買菜，內容=買雞蛋和鮮奶」➔ 呼叫 sqlite_server 之 add_note")
     print("   - 輸入「查詢筆記：買菜」或「列出筆記」➔ 呼叫 sqlite_server 之 read_notes")
     print("   - 輸入「echo Hello MCP」➔ 呼叫 own_server 之 echo_message")
+    print("   - 輸入「推薦一台 40000 元左右的遊戲電腦」➔ A2A 委派 PCforge 推薦硬體菜單")
     print("   - 輸入「exit」或「quit」即可退出程式。")
     print("-" * 65)
 
-    # 建立編譯好的狀態圖 (注入 mcp_manager)
-    graph = create_agent_graph(mcp_manager=mcp_manager)
+    # 建立編譯好的狀態圖 (注入 mcp_manager 與 a2a_delegator)
+    graph = create_agent_graph(
+        mcp_manager=mcp_manager,
+        a2a_delegator=a2a_delegator,
+    )
 
     # 維護多輪對話歷史 (Session Messages)
     chat_history = []

@@ -47,7 +47,7 @@ class A2AClient:
         self,
         endpoint_url: str,
         transport: Optional[TransportHandler] = None,
-        timeout: float = 30.0,
+        timeout: float = 120.0,
     ) -> None:
         """初始化 A2A Client.
 

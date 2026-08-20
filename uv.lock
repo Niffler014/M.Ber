@@ -860,38 +860,6 @@ wheels = [
 ]
 
 [[package]]
-name = "jarvis-agent"
-version = "0.5.0"
-source = { editable = "." }
-dependencies = [
-    { name = "fastapi" },
-    { name = "langchain-core" },
-    { name = "langgraph" },
-    { name = "line-bot-sdk" },
-    { name = "mcp" },
-    { name = "pydantic" },
-    { name = "python-dotenv" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", specifier = ">=0.141.1" },
-    { name = "langchain-core", specifier = ">=0.3.0" },
-    { name = "langgraph", specifier = ">=0.2.0" },
-    { name = "line-bot-sdk", specifier = ">=3.25.0" },
-    { name = "mcp", specifier = ">=2.0.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "python-dotenv", specifier = ">=1.0.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "jsonpatch"
 version = "1.33"
 source = { registry = "https://pypi.org/simple" }
@@ -1075,6 +1043,38 @@ sdist = { url = "https://files.pythonhosted.org/packages/c5/74/cf9150e1192ccd8f6
 wheels = [
     { url = "https://files.pythonhosted.org/packages/af/d8/380e68ba0e643e47843a18a07c97fd8b79da3f7604e2656e4cd1088720c0/line_bot_sdk-3.25.0-py2.py3-none-any.whl", hash = "sha256:2950eba64da474ce753b3bc4372f22a285f7ccad23a140ca8490679c0ec56535", size = 838667, upload-time = "2026-07-07T08:50:55.871Z" },
 ]
+
+[[package]]
+name = "mber-agent"
+version = "0.5.0"
+source = { editable = "." }
+dependencies = [
+    { name = "fastapi" },
+    { name = "langchain-core" },
+    { name = "langgraph" },
+    { name = "line-bot-sdk" },
+    { name = "mcp" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.141.1" },
+    { name = "langchain-core", specifier = ">=0.3.0" },
+    { name = "langgraph", specifier = ">=0.2.0" },
+    { name = "line-bot-sdk", specifier = ">=3.25.0" },
+    { name = "mcp", specifier = ">=2.0.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "mcp"
