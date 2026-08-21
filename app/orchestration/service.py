@@ -21,6 +21,13 @@ from app.a2a.client import TransportHandler
 from app.a2a.discovery import AgentDiscoveryService
 from app.mcp.manager import MCPManager
 from app.orchestration.aggregator import ResultAggregator
+from app.orchestration.events import (
+    CompositeEventSink,
+    ListEventSink,
+    OrchestrationEvent,
+    OrchestrationEventType,
+    TraceSink,
+)
 from app.orchestration.executors import A2AExecutor, LocalExecutor, MCPExecutor
 from app.orchestration.memory_adapter import (
     CANONICAL_MEMORY_CAPABILITY,
@@ -34,6 +41,7 @@ from app.orchestration.models import (
     ExecutionResult,
     ExecutionStatus,
     ExecutionType,
+    OrchestrationResponse,
     SubTask,
     TaskPlan,
 )
@@ -195,29 +203,86 @@ class OrchestrationService:
                 return str(content).strip()
         return "空使用者請求"
 
-    def invoke(self, messages: List[BaseMessage]) -> AIMessage:
-        """執行 LangGraph 調度週期 (Single Routing Authority).
+    def invoke_with_details(
+        self,
+        messages: List[BaseMessage],
+        event_sink: Optional[TraceSink] = None,
+    ) -> OrchestrationResponse:
+        """執行 LangGraph 調度週期並回傳完整具名 OrchestrationResponse (Single Routing Authority).
 
         流程：
-        User Messages ➔ Extract Goal ➔ Planner ➔ Orchestrator ➔ ResultAggregator ➔ Final Synthesis
+        User Messages ➔ Extract Goal ➔ Planner ➔ Orchestrator ➔ ResultAggregator ➔ Final Synthesis ➔ OrchestrationResponse
         """
+        # 建立內部事件收集器以保留完整軌跡，並支援向外部 event_sink (如 SSE 即時串流) 廣播事件
+        collector = ListEventSink()
+        active_sink = CompositeEventSink([collector, event_sink]) if event_sink else collector
+
         user_goal = self.extract_latest_user_goal(messages)
         logger.info(f"[OrchestrationService] Received user goal: '{user_goal}'")
+        active_sink.emit(
+            OrchestrationEvent(
+                event_type=OrchestrationEventType.REQUEST_RECEIVED,
+                message=user_goal,
+            )
+        )
 
         # 1. 任務規劃 (Planning)
+        active_sink.emit(
+            OrchestrationEvent(
+                event_type=OrchestrationEventType.PLANNING_STARTED,
+                status="running",
+                message="Planner started analyzing intent",
+            )
+        )
         plan: TaskPlan = self.planner.plan(user_goal)
         logger.info(f"[OrchestrationService] Planner generated plan: {plan.plan_id} with {len(plan.tasks)} tasks")
+        active_sink.emit(
+            OrchestrationEvent(
+                event_type=OrchestrationEventType.PLAN_CREATED,
+                plan_id=plan.plan_id,
+                status="success",
+                message=f"Plan created with {len(plan.tasks)} tasks",
+                metadata={"task_count": len(plan.tasks)},
+            )
+        )
 
         # 2. 任務調度執行 (Execution)
-        results: List[ExecutionResult] = self.orchestrator.execute_plan(plan)
+        results: List[ExecutionResult] = self.orchestrator.execute_plan(plan, event_sink=active_sink)
 
         # 3. 成果彙整 (Aggregation)
         aggregated: AggregatedResult = self.aggregator.aggregate(plan, results)
         logger.info(f"[OrchestrationService] Aggregated result status: {aggregated.overall_status.value}")
+        active_sink.emit(
+            OrchestrationEvent(
+                event_type=OrchestrationEventType.AGGREGATION_COMPLETED,
+                plan_id=plan.plan_id,
+                status=aggregated.overall_status.value,
+                message=f"Aggregation completed with status: {aggregated.overall_status.value}",
+            )
+        )
 
         # 4. 最終回覆合成 (Response Synthesis)
         response_content = self.synthesize_response(plan, aggregated)
-        return AIMessage(content=response_content)
+        ai_message = AIMessage(content=response_content)
+        active_sink.emit(
+            OrchestrationEvent(
+                event_type=OrchestrationEventType.RESPONSE_READY,
+                plan_id=plan.plan_id,
+                status=aggregated.overall_status.value,
+                message="Final synthesized response ready",
+            )
+        )
+
+        return OrchestrationResponse(
+            message=ai_message,
+            plan=plan,
+            aggregated=aggregated,
+            events=collector.get_events(),
+        )
+
+    def invoke(self, messages: List[BaseMessage]) -> AIMessage:
+        """執行 LangGraph 調度週期 (Single Routing Authority 保持向後相容)."""
+        return self.invoke_with_details(messages).message
 
     def synthesize_response(self, plan: TaskPlan, aggregated: AggregatedResult) -> str:
         """根據 AggregatedResult 確定性合成給使用者的最終回應."""

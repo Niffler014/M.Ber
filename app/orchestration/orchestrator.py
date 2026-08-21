@@ -15,8 +15,14 @@
 """
 
 import logging
+import time
 from typing import Dict, List, Optional
 
+from app.orchestration.events import (
+    OrchestrationEvent,
+    OrchestrationEventType,
+    TraceSink,
+)
 from app.orchestration.models import (
     AggregatedResult,
     ExecutionContext,
@@ -65,11 +71,16 @@ class Orchestrator:
         logger.info(f"[Orchestrator] {task.task_id} → {result.status.value.upper()}")
         return result
 
-    def execute_plan(self, plan: TaskPlan) -> List[ExecutionResult]:
-        """按照依賴關係循序調度執行整個 TaskPlan.
+    def execute_plan(
+        self,
+        plan: TaskPlan,
+        event_sink: Optional[TraceSink] = None,
+    ) -> List[ExecutionResult]:
+        """按照依賴關係循序調度執行整個 TaskPlan (並選擇性向 event_sink 推播事件).
 
         Args:
             plan: 待執行之 TaskPlan 計畫實體
+            event_sink: 執行軌跡事件接收器 (可選)
 
         Returns:
             依原計畫順序排列之 List[ExecutionResult]
@@ -91,7 +102,7 @@ class Orchestrator:
             if ready_task is None:
                 logger.error("[Orchestrator] Detected unresolvable task dependency deadlock")
                 for remaining in pending_tasks:
-                    results_by_task_id[remaining.task_id] = ExecutionResult(
+                    deadlock_res = ExecutionResult(
                         task_id=remaining.task_id,
                         execution_type=remaining.execution_type,
                         status=ExecutionStatus.SKIPPED,
@@ -99,6 +110,19 @@ class Orchestrator:
                         result=None,
                         error="Unresolvable dependency deadlock",
                     )
+                    results_by_task_id[remaining.task_id] = deadlock_res
+                    if event_sink:
+                        event_sink.emit(
+                            OrchestrationEvent(
+                                event_type=OrchestrationEventType.TASK_SKIPPED,
+                                plan_id=plan.plan_id,
+                                task_id=remaining.task_id,
+                                execution_type=remaining.execution_type,
+                                target=remaining.target,
+                                status=ExecutionStatus.SKIPPED.value,
+                                message="Deadlock: unresolvable dependencies",
+                            )
+                        )
                 break
 
             pending_tasks.remove(ready_task)
@@ -126,6 +150,21 @@ class Orchestrator:
                     metadata={"failed_dependencies": failed_deps},
                 )
                 results_by_task_id[ready_task.task_id] = res
+
+                # 發送 TASK_SKIPPED 觀察事件
+                if event_sink:
+                    event_sink.emit(
+                        OrchestrationEvent(
+                            event_type=OrchestrationEventType.TASK_SKIPPED,
+                            plan_id=plan.plan_id,
+                            task_id=ready_task.task_id,
+                            execution_type=ready_task.execution_type,
+                            target=ready_task.target,
+                            status=ExecutionStatus.SKIPPED.value,
+                            message=f"Task [{ready_task.task_id}] skipped: {err_msg}",
+                            metadata={"failed_dependencies": failed_deps},
+                        )
+                    )
             else:
                 # 前置依賴皆圓滿成功 ➔ 建構 ExecutionContext 並執行任務
                 if ready_task.depends_on:
@@ -136,19 +175,76 @@ class Orchestrator:
                         dep: results_by_task_id[dep] for dep in ready_task.depends_on
                     }
                 )
+
+                # 發送 TASK_STARTED 事件
+                if event_sink:
+                    event_sink.emit(
+                        OrchestrationEvent(
+                            event_type=OrchestrationEventType.TASK_STARTED,
+                            plan_id=plan.plan_id,
+                            task_id=ready_task.task_id,
+                            execution_type=ready_task.execution_type,
+                            target=ready_task.target,
+                            status=ExecutionStatus.RUNNING.value,
+                            message=f"Starting {ready_task.execution_type.value} task [{ready_task.task_id}]: {ready_task.goal}",
+                        )
+                    )
+
+                # 計時與調用 Router
+                t_start = time.perf_counter()
                 res = self.execute_task(ready_task, context=context)
+                duration_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
                 results_by_task_id[ready_task.task_id] = res
+
+                # 發送完成/失敗/逾時事件
+                if event_sink:
+                    if res.status == ExecutionStatus.SUCCESS:
+                        evt_type = OrchestrationEventType.TASK_COMPLETED
+                        status_str = ExecutionStatus.SUCCESS.value
+                        msg = f"Task [{ready_task.task_id}] completed successfully"
+                    elif res.status == ExecutionStatus.TIMEOUT:
+                        evt_type = OrchestrationEventType.TASK_TIMEOUT
+                        status_str = ExecutionStatus.TIMEOUT.value
+                        msg = res.error or f"Task [{ready_task.task_id}] timed out"
+                    else:
+                        evt_type = OrchestrationEventType.TASK_FAILED
+                        status_str = ExecutionStatus.FAILED.value
+                        msg = res.error or f"Task [{ready_task.task_id}] failed"
+
+                    # 提取安全元數據 (不洩漏敏感內部資料)
+                    safe_meta = {}
+                    if ready_task.target:
+                        safe_meta["target"] = ready_task.target
+
+                    event_sink.emit(
+                        OrchestrationEvent(
+                            event_type=evt_type,
+                            plan_id=plan.plan_id,
+                            task_id=ready_task.task_id,
+                            execution_type=ready_task.execution_type,
+                            target=ready_task.target,
+                            status=status_str,
+                            duration_ms=duration_ms,
+                            message=msg,
+                            metadata=safe_meta,
+                        )
+                    )
 
         return [results_by_task_id[task.task_id] for task in plan.tasks]
 
-    def execute_and_aggregate(self, plan: TaskPlan) -> AggregatedResult:
+    def execute_and_aggregate(
+        self,
+        plan: TaskPlan,
+        event_sink: Optional[TraceSink] = None,
+    ) -> AggregatedResult:
         """執行 TaskPlan 並直接透過 ResultAggregator 產出結構化彙整報告.
 
         Args:
             plan: 待執行之 TaskPlan 計畫實體
+            event_sink: 執行軌跡事件接收器 (可選)
 
         Returns:
             驗證排序後之 AggregatedResult 實體
         """
-        results = self.execute_plan(plan)
+        results = self.execute_plan(plan, event_sink=event_sink)
         return self.aggregator.aggregate(plan, results)

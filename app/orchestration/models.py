@@ -23,7 +23,8 @@ from collections import defaultdict
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 import uuid
-from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
+from langchain_core.messages import AIMessage
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 
 class ExecutionType(str, Enum):
@@ -298,3 +299,19 @@ class AggregatedResult(BaseModel):
             elif r.error:
                 lines.append(f"  Error: {r.error}")
         return "\n".join(lines)
+    
+
+class OrchestrationResponse(BaseModel):
+    """M.Ber 調度服務應用層完整回傳成果模型 (Application-Level Orchestration Response)."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    message: AIMessage = Field(..., description="最終合成之 AIMessage")
+    plan: TaskPlan = Field(..., description="調度規劃計畫實體")
+    aggregated: AggregatedResult = Field(..., description="各子任務彙整執行報告")
+    events: List[Any] = Field(
+        default_factory=list,
+        description="調度過程產出之結構化事件清單 (Orchestration Events)",
+    )
+
+

@@ -32,7 +32,7 @@ def test_app_package_import() -> None:
     import app
 
     assert hasattr(app, "__version__"), "app package is missing __version__ attribute"
-    assert app.__version__ == "0.1.0", f"Unexpected version: {app.__version__}"
+    assert app.__version__ == "0.7.0", f"Unexpected version: {app.__version__}"
 
 
 def test_project_spec_exists() -> None:

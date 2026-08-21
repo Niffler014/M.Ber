@@ -112,13 +112,27 @@ Final Response Synthesis Layer ──► AIMessage ──► User
 ### 環境需求
 * Python >= 3.10
 * uv (推薦)
+* Node.js >= 18 (前端 Web UI)
 
-### 執行全套測試
-本專案使用 `pytest` 作為測試執行器：
+### 執行後端測試
+本專案使用 `pytest` 作為後端測試執行器：
 
 ```powershell
 uv run pytest
 ```
+
+### 啟動後端 Web API 伺服器 (FastAPI)
+```powershell
+uv run uvicorn app.interfaces.web.gateway:app --host 127.0.0.1 --port 8000 --reload
+```
+
+### 啟動前端 Web Chat UI (React + Vite)
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+瀏覽器開啟 `http://localhost:5173` 即可進行互動式對話與調度軌跡即時觀測。
 
 ### 啟動 CLI 終端機對話
 ```powershell
@@ -137,15 +151,13 @@ uv run python -m app.cli
 - [x] **Phase 5: Memory Subsystem** (已完成)
 - [x] **Phase 6: A2A (Agent2Agent) Protocol** (已完成)
 - [x] **Phase 7: Multi-Agent & Tool Orchestration** (已完成)
-  - [x] P7-01A: Orchestration Domain Models & Contracts
-  - [x] P7-01B: Router + Minimal Orchestrator (LOCAL / A2A)
-  - [x] P7-02: Structured Planner & Single-Task Planning
-  - [x] P7-03: Sequential Multi-Task Planning & Dependency Execution
-  - [x] P7-04: MCP Executor Integration
-  - [x] P7-05: Memory Capability Integration & Workflow
-  - [x] P7-06: Result Aggregation & Partial Failure Handling
-  - [x] P7-07: LangGraph Integration & Single Routing Authority
-  - [x] P7-08: Real E2E Demo, Documentation & Phase Closure
-- [ ] **Phase 8: Frontend / User Interface & API Gateway** (下一步)
+- [ ] **Phase 8: Web API & Interactive Demo UI** (進行中)
+  - [x] P8-01: Backend HTTP API & Gateway
+  - [x] P8-02: Execution Trace Collection & SSE Streaming
+  - [x] P8-03: Web Chat Frontend (React + Vite + SSE Trace UI)
+  - [ ] P8-04: MCP Activity & Runtime Inspector
+  - [ ] P8-05: Multi-Channel Expansion (LINE Notification)
+  - [ ] P8-06: Production Build & Phase Closure
 - [ ] **Phase 9: Observability, Evaluation & A2A Server Export**
 - [ ] **Phase 10: Production Hardening**
+
