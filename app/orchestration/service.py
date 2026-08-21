@@ -29,11 +29,13 @@ from app.orchestration.events import (
     TraceSink,
 )
 from app.orchestration.executors import A2AExecutor, LocalExecutor, MCPExecutor
+from app.orchestration.local_reasoning import LocalReasoningAdapter
 from app.orchestration.memory_adapter import (
     CANONICAL_MEMORY_CAPABILITY,
     MemoryAdapter,
     register_memory_capability,
 )
+from app.orchestration.model_factory import get_chat_model
 from app.orchestration.models import (
     AggregatedResult,
     AggregateStatus,
@@ -62,37 +64,8 @@ def default_local_reasoning_handler(
     llm: Optional[Any] = None,
 ) -> str:
     """處理一般本地推理解析任務 (General Local Reasoning)."""
-    goal = task.goal.strip()
-
-    # 若有傳入真實 LLM，調用 LLM 進行推理
-    if llm is not None:
-        try:
-            resp = llm.invoke([HumanMessage(content=goal)])
-            if isinstance(resp, BaseMessage):
-                return str(resp.content)
-            return str(resp)
-        except Exception as e:
-            logger.warning(f"[LocalReasoning] LLM invocation failed: {e}")
-
-    # 確定性離線回覆 / 輕量計算與問答 fallback
-    goal_lower = goal.lower()
-    if any(k in goal_lower for k in ["哈囉", "你好", "hello", "hi"]):
-        return "您好！我是 M.Ber，請問有什麼我可以協助您的？"
-
-    if "dependency injection" in goal_lower or "依賴注入" in goal_lower:
-        return (
-            "【Dependency Injection (依賴注入)】是一種軟體設計模式，"
-            "將物件所依賴的其他服務從外部傳入，而非在物件內部直接建立，"
-            "從而達到解耦、易於單元測試與依賴反轉（Inversion of Control）的效果。"
-        )
-
-    if "decorator" in goal_lower or "裝飾器" in goal_lower:
-        return (
-            "【Python Decorator (裝飾器)】是一種在不修改既有函式程式碼的前提下，"
-            "動態為其擴充額外功能（如計時、日誌、權限檢查）的高階函式語法糖（@decorator）。"
-        )
-
-    return f"已為您處理完成：{goal}"
+    adapter = LocalReasoningAdapter(llm=llm)
+    return adapter.handle_reasoning(task, context=context)
 
 
 class OrchestrationService:
@@ -114,10 +87,17 @@ class OrchestrationService:
         rpc_transport: Optional[TransportHandler] = None,
     ) -> None:
         """初始化 OrchestrationService 並完成各層依賴接線."""
-        self.llm = llm
-        self.mcp_manager = mcp_manager
-        self.discovery_service = discovery_service
+        self.llm = llm if llm is not None else get_chat_model()
+        self.mcp_manager = mcp_manager if mcp_manager is not None else MCPManager()
+        self.discovery_service = discovery_service if discovery_service is not None else AgentDiscoveryService()
         self.memory_service = memory_service
+
+        # 預設啟動時安全進行 A2A 探索 (若外部 Peer 離線則記錄警告，不中斷整體系統初始化)
+        if discovery_service is None and self.discovery_service is not None:
+            try:
+                self.discovery_service.discover_configured_peers()
+            except Exception as e:
+                logger.warning(f"[OrchestrationService] A2A peer discovery failed during startup: {e}")
 
         # 1. 初始化各協定執行器
         self.local_executor = local_executor or LocalExecutor()
@@ -142,12 +122,17 @@ class OrchestrationService:
             aggregator=self.aggregator,
         )
 
-        # 4. 初始化 Planner 與能力快照
+        # 4. 初始化 Planner 與能力快照 (在 MCP 與 A2A 發現完成後建置 Snapshot)
         if planner is not None:
             self.planner = planner
         else:
             caps = self._build_capability_summary()
-            self.planner = Planner(llm=self.llm, capability_summary=caps)
+            if self.llm is not None:
+                logger.info("[Planner] backend=structured_llm")
+                self.planner = Planner(llm=self.llm, capability_summary=caps)
+            else:
+                logger.info("[Planner] backend=deterministic_offline")
+                self.planner = Planner(capability_summary=caps)
 
     def _setup_local_executor(self) -> None:
         """為 LocalExecutor 註冊標準 Local Capabilities (Reasoning, Memory, Utilities)."""
@@ -159,14 +144,19 @@ class OrchestrationService:
         )
 
         # B. 通用推理能力 (Default / general_qa / agent_reasoning)
-        def reasoning_wrapper(task: SubTask, context: Optional[ExecutionContext] = None) -> str:
-            return default_local_reasoning_handler(task, context=context, llm=self.llm)
+        self.local_reasoning_adapter = LocalReasoningAdapter(llm=self.llm)
 
-        self.local_executor.register_handler("general_qa", reasoning_wrapper)
-        self.local_executor.register_handler("agent_reasoning", reasoning_wrapper)
+        self.local_executor.register_handler(
+            "general_qa", self.local_reasoning_adapter.handle_reasoning
+        )
+        self.local_executor.register_handler(
+            "agent_reasoning", self.local_reasoning_adapter.handle_reasoning
+        )
 
         # 註冊預設未指定 target 之 fallback 處理常式
-        self.local_executor.register_handler("default", reasoning_wrapper)
+        self.local_executor.register_handler(
+            "default", self.local_reasoning_adapter.handle_reasoning
+        )
 
     def _build_capability_summary(self) -> CapabilitySummary:
         """動態彙整當前系統已知可用能力清單."""
@@ -247,7 +237,10 @@ class OrchestrationService:
         )
 
         # 2. 任務調度執行 (Execution)
-        results: List[ExecutionResult] = self.orchestrator.execute_plan(plan, event_sink=active_sink)
+        exec_ctx = ExecutionContext(metadata={"messages": messages})
+        results: List[ExecutionResult] = self.orchestrator.execute_plan(
+            plan, context=exec_ctx, event_sink=active_sink
+        )
 
         # 3. 成果彙整 (Aggregation)
         aggregated: AggregatedResult = self.aggregator.aggregate(plan, results)

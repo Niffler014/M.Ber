@@ -196,12 +196,16 @@ class ExecutionContext(BaseModel):
     """子任務執行運行期上下文 (Runtime Execution Context).
 
     用以在任務相依鏈中傳遞前置依賴任務之執行產出 (Dependency Results Propagation)，
-    避免直接 mutate 靜態的 SubTask.parameters。
+    以及攜帶會話元數據 (如對話歷史訊息清單)。
     """
 
     dependency_results: Dict[str, ExecutionResult] = Field(
         default_factory=dict,
         description="前置依賴任務之執行成果映射表 (以 task_id 為鍵)",
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="執行上下文元數據 (如對話歷史訊息清單 messages)",
     )
 
     def get_result(self, task_id: str) -> Optional[Any]:

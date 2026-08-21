@@ -144,9 +144,61 @@ class MockDeterministicPlanningBackend(BasePlanningBackend):
         is_sequential_combo = any(
             kw in user_goal for kw in ["然後", "接著", "之後", "完成後", "and then", "after that"]
         )
-        has_pc_intent = any(k in ug_lower for k in ["電腦", "pc", "配單", "菜單", "硬體"])
+        has_pc_intent = any(
+            k in ug_lower
+            for k in [
+                "配電腦",
+                "組電腦",
+                "買電腦",
+                "電腦配置",
+                "組裝電腦",
+                "配單",
+                "菜單",
+                "推薦電腦",
+                "電腦推薦",
+                "組主機",
+                "配主機",
+                "電腦菜單",
+                "想配電腦",
+                "要配電腦",
+                "我想配電腦",
+                "我想組電腦",
+            ]
+        ) or (
+            any(k in ug_lower for k in ["電腦", "pc", "主機", "硬體"])
+            and any(k in ug_lower for k in ["配", "組", "菜單", "推薦", "預算", "買", "規格", "配置", "單子", "想要", "想買"])
+        )
+        is_casual_pc_mention = any(
+            k in ug_lower
+            for k in [
+                "我昨天買了",
+                "買了一台",
+                "買了新",
+                "已經買了",
+                "入手了",
+                "昨天買",
+                "為什麼會變慢",
+                "為什麼電腦",
+                "電腦中毒",
+            ]
+        )
+        if is_casual_pc_mention:
+            has_pc_intent = False
+
         has_store_intent = any(
-            k in ug_lower for k in ["記住", "儲存", "記錄", "儲存配置", "記下", "記得", "記起", "記", "remember", "store", "save"]
+            k in ug_lower
+            for k in [
+                "記住",
+                "儲存",
+                "記錄",
+                "儲存配置",
+                "記下",
+                "記得",
+                "記起",
+                "remember",
+                "store",
+                "save",
+            ]
         )
 
         if is_sequential_combo and has_pc_intent and has_store_intent:
@@ -187,27 +239,28 @@ class MockDeterministicPlanningBackend(BasePlanningBackend):
             )
 
         # 3. 單一 A2A 技能比對
-        for skill in capability_summary.a2a_skills:
-            skill_id = skill.get("id", "").lower()
-            skill_name = skill.get("name", "").lower()
-            tags = [t.lower() for t in skill.get("tags", [])]
-            if (
-                skill_id in ug_lower
-                or (skill_name and skill_name in ug_lower)
-                or any(t in ug_lower for t in tags)
-                or (has_pc_intent and any(k in skill_id for k in ["pc", "build", "hardware", "recommend"]))
-            ):
-                return PlanStructuredOutput(
-                    tasks=[
-                        PlannedTask(
-                            step_id="step_1",
-                            execution_type=ExecutionType.A2A,
-                            goal=user_goal,
-                            target=skill.get("id"),
-                            depends_on=[],
-                        )
-                    ]
-                )
+        if not is_casual_pc_mention:
+            for skill in capability_summary.a2a_skills:
+                skill_id = skill.get("id", "").lower()
+                skill_name = skill.get("name", "").lower()
+                tags = [t.lower() for t in skill.get("tags", [])]
+                if (
+                    (skill_id and skill_id in ug_lower)
+                    or (skill_name and skill_name in ug_lower)
+                    or (has_pc_intent and any(k in skill_id for k in ["pc", "build", "hardware", "recommend"]))
+                    or any(t in ug_lower for t in tags if len(t) > 2 or t == "pc" or t == "組裝" or t == "配單")
+                ):
+                    return PlanStructuredOutput(
+                        tasks=[
+                            PlannedTask(
+                                step_id="step_1",
+                                execution_type=ExecutionType.A2A,
+                                goal=user_goal,
+                                target=skill.get("id"),
+                                depends_on=[],
+                            )
+                        ]
+                    )
 
         # 4. 單一 MCP 工具比對
         has_time_intent = any(k in ug_lower for k in ["現在幾點", "幾點", "時間", "time", "clock"])

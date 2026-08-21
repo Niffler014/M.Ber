@@ -91,7 +91,28 @@ class LocalExecutor(BaseExecutor):
                 source=f"local:{target_name}",
                 result=output,
             )
+        except (TimeoutError, socket.timeout) as e:
+            err_msg = f"本地能力 '{target_name}' 執行逾時: {e}"
+            logger.error(f"[Local] {err_msg}")
+            return ExecutionResult(
+                task_id=task.task_id,
+                execution_type=ExecutionType.LOCAL,
+                status=ExecutionStatus.TIMEOUT,
+                source=f"local:{target_name}",
+                error=err_msg,
+            )
         except Exception as e:
+            err_str = str(e).lower()
+            if "timeout" in err_str or "timed out" in err_str:
+                err_msg = f"本地能力 '{target_name}' 執行逾時: {e}"
+                logger.error(f"[Local] {err_msg}")
+                return ExecutionResult(
+                    task_id=task.task_id,
+                    execution_type=ExecutionType.LOCAL,
+                    status=ExecutionStatus.TIMEOUT,
+                    source=f"local:{target_name}",
+                    error=err_msg,
+                )
             err_msg = f"本地能力 '{target_name}' 執行時發生錯誤: {e}"
             logger.error(f"[Local] {err_msg}")
             return ExecutionResult(
@@ -333,15 +354,22 @@ class MCPExecutor(BaseExecutor):
       轉交由 MCPManager 調用對應的 MCP Server 工具。
     - 保留原有 SafetyLevel 評估流程（唯讀與寫入審查）。
     - 將 MCP 輸出標準化為字串或資料，映射回 ExecutionResult。
+    - 即時向 `MCPActivityRecorder` 登錄執行觀測紀錄。
     """
 
-    def __init__(self, mcp_manager: Optional[MCPManager] = None) -> None:
+    def __init__(
+        self,
+        mcp_manager: Optional[MCPManager] = None,
+        activity_recorder: Optional[Any] = None,
+    ) -> None:
         """初始化 MCPExecutor.
 
         Args:
             mcp_manager: MCP 伺服器總管實例 (若為 None 則於初次調用或初始化時建立預設實例)
+            activity_recorder: MCP 活動觀測記錄器實例 (若為 None 則使用預設單例)
         """
         self._mcp_manager = mcp_manager
+        self._activity_recorder = activity_recorder
 
     @property
     def mcp_manager(self) -> MCPManager:
@@ -350,8 +378,18 @@ class MCPExecutor(BaseExecutor):
             self._mcp_manager = MCPManager()
         return self._mcp_manager
 
+    @property
+    def activity_recorder(self) -> Any:
+        """取得或延遲初始化 MCPActivityRecorder 實例."""
+        if self._activity_recorder is None:
+            from app.mcp.activity import get_default_mcp_recorder
+            self._activity_recorder = get_default_mcp_recorder()
+        return self._activity_recorder
+
     def execute(self, task: SubTask, context: Optional[ExecutionContext] = None) -> ExecutionResult:
         """執行 MCP 工具子任務."""
+        import time
+
         tool_name = (task.target or "").strip()
         if not tool_name:
             err_msg = "未指定 MCP 工具名稱 (task.target 為空)"
@@ -365,13 +403,29 @@ class MCPExecutor(BaseExecutor):
             )
 
         args = dict(task.parameters or {})
-        logger.info(f"[MCP] Executing tool: {tool_name} (task_id: {task.task_id})")
+        tool_routes = getattr(self.mcp_manager, "tool_routes", {})
+        server_name = tool_routes.get(tool_name, "unknown") if isinstance(tool_routes, dict) else "unknown"
+        eval_safety = getattr(self.mcp_manager, "evaluate_safety_level", None)
+        safety_level = eval_safety(tool_name, args) if callable(eval_safety) else "READ_ONLY"
+        logger.info(f"[MCP] Executing tool: {tool_name} (task_id: {task.task_id}, server: {server_name})")
+
+        start_time = time.perf_counter()
 
         try:
             raw_output = self.mcp_manager.call_tool(tool_name, args)
         except (TimeoutError, socket.timeout) as e:
+            duration_ms = (time.perf_counter() - start_time) * 1000
             err_msg = f"MCP 工具 '{tool_name}' 調用逾時: {e}"
             logger.error(f"[MCP] {err_msg}")
+            self.activity_recorder.record(
+                tool_name=tool_name,
+                server_name=server_name,
+                status="timeout",
+                duration_ms=duration_ms,
+                task_id=task.task_id,
+                safety_level=safety_level,
+                error_summary=err_msg,
+            )
             return ExecutionResult(
                 task_id=task.task_id,
                 execution_type=ExecutionType.MCP,
@@ -381,45 +435,68 @@ class MCPExecutor(BaseExecutor):
                 metadata={"tool_name": tool_name},
             )
         except Exception as e:
+            duration_ms = (time.perf_counter() - start_time) * 1000
             err_str = str(e).lower()
-            if "timeout" in err_str or "timed out" in err_str:
-                err_msg = f"MCP 工具 '{tool_name}' 執行逾時: {e}"
-                logger.error(f"[MCP] {err_msg}")
-                return ExecutionResult(
-                    task_id=task.task_id,
-                    execution_type=ExecutionType.MCP,
-                    status=ExecutionStatus.TIMEOUT,
-                    source=f"mcp:{tool_name}",
-                    error=err_msg,
-                    metadata={"tool_name": tool_name},
-                )
-            err_msg = f"MCP 工具 '{tool_name}' 執行失敗: {e}"
+            is_timeout = "timeout" in err_str or "timed out" in err_str
+            status = "timeout" if is_timeout else "failed"
+            err_msg = f"MCP 工具 '{tool_name}' 執行逾時: {e}" if is_timeout else f"MCP 工具 '{tool_name}' 執行失敗: {e}"
             logger.error(f"[MCP] {err_msg}")
+            self.activity_recorder.record(
+                tool_name=tool_name,
+                server_name=server_name,
+                status=status,
+                duration_ms=duration_ms,
+                task_id=task.task_id,
+                safety_level=safety_level,
+                error_summary=err_msg,
+            )
+            exec_status = ExecutionStatus.TIMEOUT if is_timeout else ExecutionStatus.FAILED
             return ExecutionResult(
                 task_id=task.task_id,
                 execution_type=ExecutionType.MCP,
-                status=ExecutionStatus.FAILED,
+                status=exec_status,
                 source=f"mcp:{tool_name}",
                 error=err_msg,
                 metadata={"tool_name": tool_name},
             )
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
 
         # 檢查 MCPManager 回傳之標準錯誤前綴
         if isinstance(raw_output, str) and (
             raw_output.startswith("❌ [MCP Manager 錯誤]") or raw_output.startswith("❌ [MCP Manager 調用失敗]")
         ):
             logger.warning(f"[MCP] Execution failed: {raw_output}")
-            status = ExecutionStatus.TIMEOUT if ("timed out" in raw_output.lower() or "timeout" in raw_output.lower()) else ExecutionStatus.FAILED
+            is_timeout = "timed out" in raw_output.lower() or "timeout" in raw_output.lower()
+            status_str = "timeout" if is_timeout else "failed"
+            exec_status = ExecutionStatus.TIMEOUT if is_timeout else ExecutionStatus.FAILED
+            self.activity_recorder.record(
+                tool_name=tool_name,
+                server_name=server_name,
+                status=status_str,
+                duration_ms=duration_ms,
+                task_id=task.task_id,
+                safety_level=safety_level,
+                error_summary=raw_output,
+            )
             return ExecutionResult(
                 task_id=task.task_id,
                 execution_type=ExecutionType.MCP,
-                status=status,
+                status=exec_status,
                 source=f"mcp:{tool_name}",
                 error=raw_output,
                 metadata={"tool_name": tool_name},
             )
 
-        logger.info(f"[MCP] Tool '{tool_name}' completed successfully")
+        logger.info(f"[MCP] Tool '{tool_name}' completed successfully ({duration_ms:.2f}ms)")
+        self.activity_recorder.record(
+            tool_name=tool_name,
+            server_name=server_name,
+            status="success",
+            duration_ms=duration_ms,
+            task_id=task.task_id,
+            safety_level=safety_level,
+        )
         return ExecutionResult(
             task_id=task.task_id,
             execution_type=ExecutionType.MCP,

@@ -132,3 +132,48 @@ class ErrorResponse(BaseModel):
     """標準錯誤回應模型 (Error Response DTO)."""
 
     error: ErrorDetail = Field(..., description="錯誤詳情")
+
+
+# ==========================================
+# Phase 8 - P8-04: MCP Activity & Status DTOs
+# ==========================================
+
+
+class McpToolInfo(BaseModel):
+    """MCP 工具公開資訊模型 (不洩漏敏感內部路徑或參數細節)."""
+
+    name: str = Field(..., description="工具識別名稱 (例如 get_current_time)")
+    server: str = Field(..., description="所屬 MCP 伺服器識別名稱 (例如 own_server, calendar)")
+    safety_level: str = Field(..., description="安全等級 (read_only / write)")
+    description: Optional[str] = Field(default=None, description="工具功能摘要說明")
+
+
+class McpStatusResponse(BaseModel):
+    """MCP 系統整體狀態回應模型."""
+
+    status: str = Field(..., description="MCP 總管狀態 (online / unavailable)")
+    tool_count: int = Field(..., description="目前已探索並就緒之工具總數")
+    server_count: int = Field(..., description="目前連線就緒之 MCP 伺服器總數")
+    tools: List[McpToolInfo] = Field(default_factory=list, description="就緒之工具清單")
+
+
+class McpActivityItem(BaseModel):
+    """MCP 工具執行活動紀錄項目 (純觀測性元數據，不含使用者敏感對話或參數)."""
+
+    activity_id: str = Field(..., description="活動紀錄唯一識別碼")
+    tool_name: str = Field(..., description="調用之工具名稱")
+    server_name: str = Field(..., description="所屬伺服器名稱")
+    status: str = Field(..., description="執行結果狀態 (success / failed / timeout / running)")
+    duration_ms: Optional[float] = Field(default=None, description="執行耗時 (毫秒)")
+    timestamp: str = Field(..., description="調用時間戳記 (ISO 8601 UTC)")
+    task_id: Optional[str] = Field(default=None, description="對應調度 SubTask ID")
+    safety_level: Optional[str] = Field(default=None, description="安全等級 (READ_ONLY / WRITE / MUTATION)")
+    error_summary: Optional[str] = Field(default=None, description="安全之錯誤摘要 (不含 Traceback)")
+
+
+class McpActivityResponse(BaseModel):
+    """MCP 活動紀錄查詢回應模型."""
+
+    items: List[McpActivityItem] = Field(default_factory=list, description="最近活動紀錄清單 (由新到舊)")
+    total: int = Field(..., description="回傳之紀錄筆數")
+

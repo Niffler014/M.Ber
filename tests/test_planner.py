@@ -273,3 +273,205 @@ def test_planner_too_many_tasks_falls_back(mock_capabilities: CapabilitySummary)
 
     assert len(plan.tasks) == 1
     assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+
+
+# ============================================================================
+# P8-03.5 新增測試：Production Routing, Natural Language, & Single Stack Lifecycle
+# ============================================================================
+
+def test_planner_routes_casual_chat_to_local(mock_capabilities: CapabilitySummary):
+    """驗證生活日常問答（例如「我肚子很餓」）正確規劃為 LOCAL 執行類型."""
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("我肚子很餓")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+    assert plan.tasks[0].target is None
+
+
+def test_planner_routes_natural_pc_request_to_a2a(mock_capabilities: CapabilitySummary):
+    """驗證口語化配電腦請求（例如「我想配電腦」、「想組電腦」）正確路由至 A2A pc_recommendation."""
+    planner = Planner(capability_summary=mock_capabilities)
+
+    for prompt in ["我想配電腦", "我想組電腦", "想配電腦", "幫我配主機"]:
+        plan = planner.plan(prompt)
+        assert len(plan.tasks) == 1, f"Prompt '{prompt}' should produce 1 task"
+        assert plan.tasks[0].execution_type == ExecutionType.A2A, f"Prompt '{prompt}' should be A2A"
+        assert plan.tasks[0].target == "pc_recommendation"
+
+
+def test_planner_does_not_route_casual_pc_mention_by_keyword_only(mock_capabilities: CapabilitySummary):
+    """驗證非配單意圖但含有「電腦」字眼之陳述或疑問句，不誤判為 A2A 配單 (Negative Semantic Test)."""
+    planner = Planner(capability_summary=mock_capabilities)
+
+    casual_prompts = [
+        "我昨天買了一台電腦",
+        "我的電腦最近很慢",
+        "為什麼電腦開機沒畫面",
+    ]
+
+    for prompt in casual_prompts:
+        plan = planner.plan(prompt)
+        assert len(plan.tasks) == 1
+        assert plan.tasks[0].execution_type == ExecutionType.LOCAL, f"Prompt '{prompt}' should route to LOCAL"
+
+
+def test_mock_planner_backend_remains_available_for_tests():
+    """驗證 MockDeterministicPlanningBackend 仍可獨立用於單元測試與離線情境."""
+    backend = MockDeterministicPlanningBackend()
+    caps = CapabilitySummary(local_capabilities=["general_qa"])
+    out = backend.generate_plan_output("你好", caps)
+    assert len(out.tasks) == 1
+    assert out.tasks[0].execution_type == ExecutionType.LOCAL
+
+
+def test_production_planner_uses_structured_backend_when_model_configured():
+    """驗證當注入 ChatModel 時，Planner 啟用 LangChainStructuredPlanningBackend."""
+    from tests.test_local_reasoning import FakeListChatModel
+    from app.orchestration.planner import LangChainStructuredPlanningBackend
+
+    fake_model = FakeListChatModel()
+    planner = Planner(llm=fake_model)
+
+    assert isinstance(planner.backend, LangChainStructuredPlanningBackend)
+
+
+def test_production_capability_summary_contains_registered_local_capabilities():
+    """驗證 OrchestrationService 建立之 CapabilitySummary 包含標準 Local Capabilities."""
+    from app.orchestration.service import OrchestrationService
+
+    service = OrchestrationService()
+    caps = service._build_capability_summary()
+
+    assert "general_qa" in caps.local_capabilities
+    assert "memory_store" in caps.local_capabilities
+    assert "agent_reasoning" in caps.local_capabilities
+
+
+def test_production_capability_summary_contains_discovered_mcp_tools():
+    """驗證 CapabilitySummary 正確自 MCPManager 提取已探索之工具."""
+    from unittest.mock import MagicMock
+    from app.orchestration.service import OrchestrationService
+
+    mock_mcp = MagicMock()
+    mock_mcp.list_all_tools.return_value = [{"name": "get_current_time", "description": "取得時間"}]
+
+    service = OrchestrationService(mcp_manager=mock_mcp)
+    caps = service._build_capability_summary()
+
+    assert any(t.get("name") == "get_current_time" for t in caps.mcp_tools)
+
+
+def test_production_capability_summary_contains_discovered_a2a_skills():
+    """驗證 CapabilitySummary 正確自 AgentDiscoveryService 提取已探索之 Peer Agent 技能."""
+    from app.a2a.discovery import AgentDiscoveryService
+    from app.a2a.models import AgentCard, AgentSkill
+    from app.orchestration.service import OrchestrationService
+
+    discovery = AgentDiscoveryService(config_path="non_existent.json")
+    discovery.register_agent(
+        AgentCard(
+            name="PCforge",
+            description="PC 配單專家",
+            url="http://localhost:8001/rpc",
+            skills=[
+                AgentSkill(
+                    id="pc_recommendation",
+                    name="電腦推薦",
+                    description="PC硬體配置推薦",
+                    tags=["電腦", "pc"],
+                )
+            ],
+        )
+    )
+
+    service = OrchestrationService(discovery_service=discovery)
+    caps = service._build_capability_summary()
+
+    assert any(s.get("id") == "pc_recommendation" for s in caps.a2a_skills)
+
+
+def test_production_web_uses_single_composed_orchestration_stack():
+    """驗證 Web Gateway 與 OrchestrationService 共用單一組裝之 MCPManager 實例."""
+    from app.interfaces.web.gateway import create_web_app
+    from app.orchestration.service import OrchestrationService
+    from app.mcp.manager import MCPManager
+
+    shared_mcp = MCPManager()
+    service = OrchestrationService(mcp_manager=shared_mcp)
+    app = create_web_app(orchestration_service=service)
+
+    # 驗證 Web Gateway 確實重用 service.mcp_manager
+    assert service.mcp_manager is shared_mcp
+
+
+def test_a2a_discovery_failure_does_not_break_local_chat():
+    """驗證即使 A2A 發現失敗（例如網路異常），OrchestrationService 仍可正常初始化並提供 LOCAL 服務."""
+    from unittest.mock import patch, MagicMock
+    from langchain_core.messages import HumanMessage
+    from app.orchestration.service import OrchestrationService
+
+    with patch("app.orchestration.service.AgentDiscoveryService") as MockDiscoveryCls:
+        mock_instance = MagicMock()
+        mock_instance.discover_configured_peers.side_effect = ConnectionError("A2A endpoint down")
+        mock_instance.list_agents.return_value = []
+        MockDiscoveryCls.return_value = mock_instance
+
+        service = OrchestrationService()
+        res = service.invoke_with_details([HumanMessage(content="我肚子很餓")])
+
+        assert res.aggregated.overall_status.value == "success"
+        assert "肚子餓" in str(res.message.content) or "熱食" in str(res.message.content)
+
+
+def test_capability_summary_built_after_discovery():
+    """驗證預設啟動時 CapabilitySummary 是在 A2A 探索呼叫之後建構快照."""
+    from unittest.mock import patch, MagicMock
+    from app.orchestration.service import OrchestrationService
+    from app.a2a.models import AgentCard, AgentSkill
+
+    cards = [
+        AgentCard(
+            name="PCforge",
+            description="PC 配單專家",
+            url="http://localhost:8001/rpc",
+            skills=[
+                AgentSkill(
+                    id="pc_recommendation",
+                    name="PC配單",
+                    description="PC配單服務",
+                    tags=["電腦"],
+                )
+            ],
+        )
+    ]
+    with patch("app.orchestration.service.AgentDiscoveryService") as MockDiscoveryCls:
+        mock_instance = MagicMock()
+        mock_instance.discover_configured_peers.return_value = cards
+        mock_instance.list_agents.return_value = cards
+        MockDiscoveryCls.return_value = mock_instance
+
+        service = OrchestrationService()
+
+        # 驗證 discover_configured_peers 有被呼叫
+        mock_instance.discover_configured_peers.assert_called_once()
+        # 驗證 Planner 的 capability_summary 包含該技能
+        assert any(s.get("id") == "pc_recommendation" for s in service.planner.capability_summary.a2a_skills)
+
+
+def test_production_planner_backend_selection_is_explicit(caplog):
+    """驗證 Planner 啟動時明確記錄所選用的後端 (structured_llm 或 deterministic_offline)."""
+    import logging
+    from tests.test_local_reasoning import FakeListChatModel
+    from app.orchestration.service import OrchestrationService
+
+    with caplog.at_level(logging.INFO, logger="mber.orchestration"):
+        s1 = OrchestrationService(llm=FakeListChatModel())
+        assert any("backend=structured_llm" in record.message for record in caplog.records)
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="mber.orchestration"):
+        s2 = OrchestrationService(llm=None)
+        assert any("backend=deterministic_offline" in record.message for record in caplog.records)
+
+

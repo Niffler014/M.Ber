@@ -74,12 +74,14 @@ class Orchestrator:
     def execute_plan(
         self,
         plan: TaskPlan,
+        context: Optional[ExecutionContext] = None,
         event_sink: Optional[TraceSink] = None,
     ) -> List[ExecutionResult]:
         """按照依賴關係循序調度執行整個 TaskPlan (並選擇性向 event_sink 推播事件).
 
         Args:
             plan: 待執行之 TaskPlan 計畫實體
+            context: 呼叫端傳入之基礎執行上下文 (可選，例如對話歷史元數據)
             event_sink: 執行軌跡事件接收器 (可選)
 
         Returns:
@@ -89,6 +91,7 @@ class Orchestrator:
 
         results_by_task_id: Dict[str, ExecutionResult] = {}
         pending_tasks: List[SubTask] = list(plan.tasks)
+        base_meta = dict(context.metadata) if context and context.metadata else {}
 
         while pending_tasks:
             # 尋找所有前置依賴皆已處理完成的候選子任務
@@ -106,9 +109,8 @@ class Orchestrator:
                         task_id=remaining.task_id,
                         execution_type=remaining.execution_type,
                         status=ExecutionStatus.SKIPPED,
-                        source=None,
-                        result=None,
-                        error="Unresolvable dependency deadlock",
+                        source=f"{remaining.execution_type.value}:{remaining.target or 'unknown'}",
+                        error="前置依賴存在未解析的循環死鎖",
                     )
                     results_by_task_id[remaining.task_id] = deadlock_res
                     if event_sink:
@@ -127,7 +129,7 @@ class Orchestrator:
 
             pending_tasks.remove(ready_task)
 
-            # 檢查所有前置依賴是否皆為 SUCCESS
+            # 檢查前置依賴狀態
             failed_deps = [
                 dep
                 for dep in ready_task.depends_on
@@ -135,23 +137,21 @@ class Orchestrator:
             ]
 
             if failed_deps:
-                # 任一前置依賴失敗 ➔ 直接標記為 SKIPPED，不調用 Router
+                # 前置依賴未滿足 ➔ 安全標記為 SKIPPED
                 err_msg = f"Dependency failed: {', '.join(failed_deps)}"
                 logger.warning(
                     f"[Orchestrator] {ready_task.task_id} skipped due to failed dependency: {', '.join(failed_deps)}"
                 )
-                res = ExecutionResult(
+                skipped_res = ExecutionResult(
                     task_id=ready_task.task_id,
                     execution_type=ready_task.execution_type,
                     status=ExecutionStatus.SKIPPED,
-                    source=None,
-                    result=None,
+                    source=f"{ready_task.execution_type.value}:{ready_task.target or 'unknown'}",
                     error=err_msg,
                     metadata={"failed_dependencies": failed_deps},
                 )
-                results_by_task_id[ready_task.task_id] = res
+                results_by_task_id[ready_task.task_id] = skipped_res
 
-                # 發送 TASK_SKIPPED 觀察事件
                 if event_sink:
                     event_sink.emit(
                         OrchestrationEvent(
@@ -166,17 +166,16 @@ class Orchestrator:
                         )
                     )
             else:
-                # 前置依賴皆圓滿成功 ➔ 建構 ExecutionContext 並執行任務
                 if ready_task.depends_on:
                     logger.info(f"[Orchestrator] Dependencies satisfied for {ready_task.task_id}")
 
-                context = ExecutionContext(
+                task_context = ExecutionContext(
                     dependency_results={
                         dep: results_by_task_id[dep] for dep in ready_task.depends_on
-                    }
+                    },
+                    metadata=dict(base_meta),
                 )
 
-                # 發送 TASK_STARTED 事件
                 if event_sink:
                     event_sink.emit(
                         OrchestrationEvent(
@@ -190,13 +189,11 @@ class Orchestrator:
                         )
                     )
 
-                # 計時與調用 Router
                 t_start = time.perf_counter()
-                res = self.execute_task(ready_task, context=context)
+                res = self.execute_task(ready_task, context=task_context)
                 duration_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
                 results_by_task_id[ready_task.task_id] = res
 
-                # 發送完成/失敗/逾時事件
                 if event_sink:
                     if res.status == ExecutionStatus.SUCCESS:
                         evt_type = OrchestrationEventType.TASK_COMPLETED
@@ -211,7 +208,6 @@ class Orchestrator:
                         status_str = ExecutionStatus.FAILED.value
                         msg = res.error or f"Task [{ready_task.task_id}] failed"
 
-                    # 提取安全元數據 (不洩漏敏感內部資料)
                     safe_meta = {}
                     if ready_task.target:
                         safe_meta["target"] = ready_task.target

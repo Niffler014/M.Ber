@@ -155,7 +155,7 @@ uv run python -m app.cli
   - [x] P8-01: Backend HTTP API & Gateway
   - [x] P8-02: Execution Trace Collection & SSE Streaming
   - [x] P8-03: Web Chat Frontend (React + Vite + SSE Trace UI)
-  - [ ] P8-04: MCP Activity & Runtime Inspector
+  - [x] P8-04: MCP Activity & Runtime Inspector
   - [ ] P8-05: Multi-Channel Expansion (LINE Notification)
   - [ ] P8-06: Production Build & Phase Closure
 - [ ] **Phase 9: Observability, Evaluation & A2A Server Export**

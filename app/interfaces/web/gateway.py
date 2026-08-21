@@ -1,24 +1,19 @@
 """M.Ber Web Gateway & HTTP API Entrypoint (Web 應用程式閘道模組).
-Phase 8 - P8-02: Execution Trace & Streaming
+Phase 8 - P8-04: MCP Activity & Runtime Inspector
 
 【新手教學 / 觀念解析】：
 1. 什麼是 Web Gateway？
    - Web Gateway 是 M.Ber 的「HTTP 傳輸轉接站（HTTP Transport Layer）」。
    - 它負責：
-     ① 監聽前端 HTTP 請求（例如 `/api/health`、`/api/chat`、`/api/chat/stream`）。
+     ① 監聽前端 HTTP 請求（`/api/health`、`/api/chat`、`/api/chat/stream`、`/api/mcp/status`、`/api/mcp/activity`）。
      ② 將傳入的 JSON 資料驗證轉換為 DTO（Data Transfer Object）。
-     ③ 呼叫 Application Service（`OrchestrationService`）進行統一調度運算。
+     ③ 呼叫 Application Service（`OrchestrationService`）與觀測記錄器（`MCPActivityRecorder`）。
      ④ 將後端的 Domain Model / Event 轉換為前端安全的 Response DTO / SSE Stream 並回傳。
    - 核心原則：**Web Gateway 絕不自行做調度（Orchestration）**，所有調度權力均交由 `OrchestrationService`。
 
-2. Server-Sent Events (SSE) 串流原理：
-   - 使用標準 HTTP 長連線 (`text/event-stream`)，伺服器能主動向瀏覽器推播事件。
-   - 事件格式：
-     event: trace
-     data: {"event_type": "task_started", ...}
-
-     event: final
-     data: {"message": "...", "status": "success"}
+2. 安全性與觀測性邊界 (Observability & Safety Boundary)：
+   - `/api/mcp/status` 與 `/api/mcp/activity` 僅提供純唯讀觀測資訊。
+   - 嚴禁透過 API 外洩伺服器本地檔案路徑、Stdio 啟動指令、環境變數、工具輸入參數或對話隱私內容。
 """
 
 import asyncio
@@ -27,7 +22,7 @@ import logging
 import threading
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -40,9 +35,15 @@ from app.interfaces.web.models import (
     ErrorDetail,
     ErrorResponse,
     HealthResponse,
+    McpActivityItem,
+    McpActivityResponse,
+    McpStatusResponse,
+    McpToolInfo,
     TraceEvent,
     to_public_trace_event,
 )
+from app.mcp.activity import MCPActivityRecorder, get_default_mcp_recorder
+from app.mcp.manager import MCPManager
 from app.orchestration.events import CallbackEventSink, OrchestrationEvent
 from app.orchestration.models import OrchestrationResponse
 from app.orchestration.service import OrchestrationService
@@ -58,12 +59,16 @@ DEFAULT_ALLOWED_ORIGINS = [
 
 def create_web_app(
     orchestration_service: Optional[OrchestrationService] = None,
+    mcp_manager: Optional[MCPManager] = None,
+    mcp_recorder: Optional[MCPActivityRecorder] = None,
     allowed_origins: Optional[List[str]] = None,
 ) -> FastAPI:
     """建立並設定 M.Ber FastAPI Web 應用程式實例 (工廠函式 / Dependency Injection).
 
     Args:
         orchestration_service: 長期存活的調度總管服務實例 (若未提供則自動建立)
+        mcp_manager: MCP 伺服器總管實例 (若未提供則自動建立)
+        mcp_recorder: MCP 活動觀測記錄器實例 (若未提供則使用全域單例)
         allowed_origins: 允許跨來源請求的前端 URL 清單 (預設為 Localhost Vite 開發伺服器)
 
     Returns:
@@ -85,8 +90,10 @@ def create_web_app(
         allow_headers=["*"],
     )
 
-    # 2. 服務實例生命週期管理 (Long-lived Service Instance)
+    # 2. 服務實例生命週期管理 (Long-lived Service Instances)
     service = orchestration_service or OrchestrationService()
+    active_mcp_manager = mcp_manager or getattr(service, "mcp_manager", None) or MCPManager()
+    active_recorder = mcp_recorder or get_default_mcp_recorder()
 
     # 3. 註冊全域例外處理器 (Global Exception Handlers)
     @app.exception_handler(RequestValidationError)
@@ -257,6 +264,60 @@ def create_web_app(
                 "X-Accel-Buffering": "no",
             },
         )
+
+    # 5. MCP 觀測與活動端點 (MCP Status & Activity Endpoints - P8-04)
+    @app.get("/api/mcp/status", response_model=McpStatusResponse)
+    async def mcp_status() -> McpStatusResponse:
+        """取得目前 MCP 系統狀態與已探索工具清單 (不暴露機密或路徑)."""
+        try:
+            tools_meta = active_mcp_manager.get_tools_metadata()
+            tool_infos = [
+                McpToolInfo(
+                    name=t["name"],
+                    server=t["server"],
+                    safety_level=t["safety_level"],
+                    description=t.get("description"),
+                )
+                for t in tools_meta
+            ]
+            srv_count = active_mcp_manager.get_server_count()
+            status_str = "online" if srv_count > 0 or len(tool_infos) > 0 else "unavailable"
+            return McpStatusResponse(
+                status=status_str,
+                tool_count=len(tool_infos),
+                server_count=srv_count,
+                tools=tool_infos,
+            )
+        except Exception as exc:
+            logger.exception(f"[Web Gateway] 讀取 MCP 狀態時發生異常: {exc}")
+            return McpStatusResponse(
+                status="unavailable",
+                tool_count=0,
+                server_count=0,
+                tools=[],
+            )
+
+    @app.get("/api/mcp/activity", response_model=McpActivityResponse)
+    async def mcp_activity(
+        limit: int = Query(default=20, ge=1, le=100, description="查詢最近筆數限制 (1-100)")
+    ) -> McpActivityResponse:
+        """取得最近 MCP 工具調用之全域活動觀測紀錄清單."""
+        records = active_recorder.get_recent(limit=limit)
+        items = [
+            McpActivityItem(
+                activity_id=r.activity_id,
+                tool_name=r.tool_name,
+                server_name=r.server_name,
+                status=r.status,
+                duration_ms=r.duration_ms,
+                timestamp=r.timestamp,
+                task_id=r.task_id,
+                safety_level=r.safety_level,
+                error_summary=r.error_summary,
+            )
+            for r in records
+        ]
+        return McpActivityResponse(items=items, total=len(items))
 
     return app
 

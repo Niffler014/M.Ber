@@ -101,6 +101,26 @@ class MCPManager:
         """回傳所有已連線 MCP Servers 的所有工具清單 (包含名稱、說明與參數 Schema)."""
         return self.cached_tools
 
+    def get_server_count(self) -> int:
+        """回傳目前已連線之 MCP Server 數量."""
+        return len(self.clients)
+
+    def get_tools_metadata(self) -> List[Dict[str, Any]]:
+        """回傳所有工具之安全公開元數據 (僅含 name, server, safety_level, description)."""
+        metadata_list = []
+        for tool in self.cached_tools:
+            name = tool.get("name", "")
+            server = self.tool_routes.get(name, "unknown")
+            safety = self.evaluate_safety_level(name, {})
+            desc = tool.get("description", "")
+            metadata_list.append({
+                "name": name,
+                "server": server,
+                "safety_level": "read_only" if safety == "READ_ONLY" else "write",
+                "description": desc,
+            })
+        return metadata_list
+
     def evaluate_safety_level(self, tool_name: str, arguments: Dict[str, Any]) -> str:
         """評估工具調用之安全權限等級 (READ_ONLY vs WRITE / MUTATION).
 

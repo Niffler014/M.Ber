@@ -160,3 +160,42 @@ export async function streamChat(
     });
   }
 }
+
+/**
+ * 取得 MCP 系統狀態與已探索工具清單.
+ */
+export async function getMcpStatus(): Promise<import('./types').McpStatusResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/mcp/status`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`MCP status request failed with status: ${res.status}`);
+  }
+
+  return (await res.json()) as import('./types').McpStatusResponse;
+}
+
+/**
+ * 取得最近 MCP 工具活動紀錄清單.
+ */
+export async function getMcpActivity(
+  limit: number = 20,
+): Promise<import('./types').McpActivityResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/mcp/activity?limit=${limit}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`MCP activity request failed with status: ${res.status}`);
+  }
+
+  return (await res.json()) as import('./types').McpActivityResponse;
+}
+

@@ -8,6 +8,10 @@ from app.interfaces.web.models import (
     HealthResponse,
     ErrorDetail,
     ErrorResponse,
+    McpToolInfo,
+    McpStatusResponse,
+    McpActivityItem,
+    McpActivityResponse,
     to_public_trace_event,
 )
 
@@ -20,5 +24,9 @@ __all__ = [
     "HealthResponse",
     "ErrorDetail",
     "ErrorResponse",
+    "McpToolInfo",
+    "McpStatusResponse",
+    "McpActivityItem",
+    "McpActivityResponse",
     "to_public_trace_event",
 ]

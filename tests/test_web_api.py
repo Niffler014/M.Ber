@@ -303,3 +303,61 @@ def test_chat_response_does_not_expose_internal_domain_objects(fake_orchestratio
     ]
     for key in forbidden_keys:
         assert key not in data, f"內部領域模型欄位 '{key}' 意外暴露在 HTTP API 回應中"
+
+
+def test_chat_api_uses_real_local_reasoning_result() -> None:
+    """驗證 Web Chat API 使用真實 LLM (FakeChatModel) 回傳自然語言結果，絕非佔位模版."""
+    from tests.test_local_reasoning import FakeListChatModel
+
+    fake_model = FakeListChatModel(responses=["肚子餓的話，我推薦先去買一碗熱騰騰的鍋燒意麵！"])
+    service = OrchestrationService(llm=fake_model)
+    app = create_web_app(orchestration_service=service)
+    client = TestClient(app)
+
+    response = client.post("/api/chat", json={"message": "我肚子很餓"})
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["status"] == "success"
+    assert "鍋燒意麵" in data["message"]
+    assert "已為您處理完成" not in data["message"]
+
+
+def test_chat_api_pc_request_routes_a2a() -> None:
+    """驗證口語化配電腦請求經 Web API 發送後，正確規劃至 A2A 並調用外部代理人."""
+    from app.a2a.discovery import AgentDiscoveryService
+    from app.a2a.models import AgentCard, AgentSkill
+    from tests.test_pcforge_a2a import fake_pcforge_rpc_transport
+
+    discovery = AgentDiscoveryService(config_path="non_existent.json")
+    discovery.register_agent(
+        AgentCard(
+            name="PCforge",
+            description="PC 配單專家",
+            url="http://localhost:8001/rpc",
+            skills=[
+                AgentSkill(
+                    id="pc_recommendation",
+                    name="電腦推薦",
+                    description="PC硬體推薦",
+                    tags=["電腦", "pc"],
+                )
+            ],
+        )
+    )
+
+    service = OrchestrationService(
+        discovery_service=discovery,
+        rpc_transport=fake_pcforge_rpc_transport,
+    )
+    app = create_web_app(orchestration_service=service)
+    client = TestClient(app)
+
+    response = client.post("/api/chat", json={"message": "我想配電腦"})
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["status"] == "success"
+    # 驗證 Trace 中有 A2A 執行痕跡
+    assert any((t.get("execution_type") or "").upper() == "A2A" for t in data["trace"])
+
