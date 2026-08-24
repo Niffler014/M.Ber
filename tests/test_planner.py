@@ -693,4 +693,90 @@ def test_structured_llm_planner_sanitizes_unrequested_memory_on_a2a_task():
     assert plan.tasks[0].depends_on == []
 
 
+# ============================================================================
+# P8-03.5 Production A2A Intent & Semantic Routing Regression Tests
+# ============================================================================
+
+def test_planner_routes_assemble_40k_pc_to_a2a(mock_capabilities: CapabilitySummary):
+    """驗證「我想組一台四萬塊的電腦」正確路由至 A2A pc_recommendation."""
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("我想組一台四萬塊的電腦")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.A2A
+    assert plan.tasks[0].target == "pc_recommendation"
+
+
+def test_planner_routes_want_build_pc_to_a2a(mock_capabilities: CapabilitySummary):
+    """驗證「我想配電腦」正確路由至 A2A pc_recommendation."""
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("我想配電腦")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.A2A
+    assert plan.tasks[0].target == "pc_recommendation"
+
+
+def test_planner_routes_help_build_40k_gaming_rig_to_a2a(mock_capabilities: CapabilitySummary):
+    """驗證「幫我組一台四萬元遊戲主機」正確路由至 A2A pc_recommendation."""
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("幫我組一台四萬元遊戲主機")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.A2A
+    assert plan.tasks[0].target == "pc_recommendation"
+
+
+def test_planner_routes_bought_pc_yesterday_to_local(mock_capabilities: CapabilitySummary):
+    """驗證「我昨天買了一台電腦」不會誤觸 A2A，正確路由至 LOCAL general_qa."""
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("我昨天買了一台電腦")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+    assert plan.tasks[0].target in (None, "general_qa")
+
+
+def test_planner_fallback_when_pcforge_unavailable():
+    """驗證當 PCforge capability 不存在時，必須安全 fallback，不得產生不存在的 A2A target."""
+    caps_without_pc = CapabilitySummary(
+        a2a_skills=[],  # 無任何 A2A 技能
+        mcp_tools=[],
+        local_capabilities=["general_qa", "memory_store"],
+    )
+    planner = Planner(capability_summary=caps_without_pc)
+    plan = planner.plan("我想組一台四萬塊的電腦")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+    assert plan.tasks[0].target in (None, "general_qa")
+    assert plan.tasks[0].target != "pc_recommendation"
+
+
+def test_planner_uses_production_capability_summary_with_pc_recommendation():
+    """驗證 production-style CapabilitySummary 包含 pc_recommendation 時，Planner 必須能使用它."""
+    prod_caps = CapabilitySummary(
+        a2a_skills=[
+            {
+                "id": "pc_recommendation",
+                "name": "電腦配置推薦",
+                "description": "根據預算與用途推薦電腦硬體配置",
+                "tags": ["電腦", "pc", "硬體", "組裝", "配單"],
+                "agent_name": "PCforge",
+            }
+        ],
+        mcp_tools=[
+            {"name": "get_current_time", "description": "取得當前系統時間與日期"},
+        ],
+        local_capabilities=["memory_store", "general_qa", "agent_reasoning"],
+    )
+    planner = Planner(capability_summary=prod_caps)
+    plan = planner.plan("推薦一台工作用電腦")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.A2A
+    assert plan.tasks[0].target == "pc_recommendation"
+
+
+
 

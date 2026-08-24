@@ -117,6 +117,90 @@ def _has_explicit_time_intent(text: str) -> bool:
     )
 
 
+def _is_non_recommendation_pc_query(text: str) -> bool:
+    """檢查使用者語句是否屬於非硬體配單之電腦提及（如日常閒聊、故障回報、程式相容性、概念問答、已購買過往經驗）."""
+    t_lower = text.lower()
+    return any(
+        kw in t_lower
+        for kw in [
+            "我昨天買了",
+            "買了一台",
+            "買了新",
+            "已經買了",
+            "入手了",
+            "昨天買",
+            "壞了",
+            "故障",
+            "壞掉",
+            "修電腦",
+            "電腦維修",
+            "藍屏",
+            "當機",
+            "死機",
+            "中毒",
+            "螢幕不亮",
+            "變慢",
+            "很慢",
+            "卡住",
+            "怎麼運作",
+            "如何運作",
+            "是什麼",
+            "原理",
+            "可以在電腦上跑嗎",
+            "可以在電腦執行",
+            "電腦上執行",
+            "電腦能跑嗎",
+            "跑得動嗎",
+        ]
+    )
+
+
+def _has_pc_recommendation_intent(text: str) -> bool:
+    """語意檢測使用者是否正在尋求 PC / 主機 / 硬體之配單、規格建議、組裝或購機預算推薦."""
+    if _is_non_recommendation_pc_query(text):
+        return False
+
+    t_lower = text.lower()
+    # 1. 包含 PC 相關實體或概念
+    has_pc_noun = any(
+        noun in t_lower
+        for noun in [
+            "電腦",
+            "pc",
+            "主機",
+            "菜單",
+            "配單",
+            "硬體",
+            "顯卡",
+            "工作站",
+        ]
+    )
+
+    # 2. 包含配單、組裝、推薦、預算等動作或意圖
+    has_recommend_verb = any(
+        verb in t_lower
+        for verb in [
+            "配",
+            "組",
+            "推薦",
+            "菜單",
+            "預算",
+            "規格",
+            "配置",
+            "想組",
+            "想配",
+            "幫配",
+            "幫組",
+            "求推薦",
+            "組裝",
+            "開單",
+            "挑選",
+        ]
+    )
+
+    return has_pc_noun and has_recommend_verb
+
+
 class CapabilitySummary(BaseModel):
     """可用能力摘要 (Capability Awareness Snapshot)."""
 
@@ -203,50 +287,10 @@ class MockDeterministicPlanningBackend(BasePlanningBackend):
         ug_lower = user_goal.lower()
 
         # 1. 檢查是否包含循序多步驟意圖 (Sequential Multi-step Indicator)
-        # 例如：「幫我配一台 40000 元遊戲電腦，然後記住這套配置」
         is_sequential_combo = any(
             kw in user_goal for kw in ["然後", "接著", "之後", "完成後", "and then", "after that"]
         )
-        has_pc_intent = any(
-            k in ug_lower
-            for k in [
-                "配電腦",
-                "組電腦",
-                "買電腦",
-                "電腦配置",
-                "組裝電腦",
-                "配單",
-                "菜單",
-                "推薦電腦",
-                "電腦推薦",
-                "組主機",
-                "配主機",
-                "電腦菜單",
-                "想配電腦",
-                "要配電腦",
-                "我想配電腦",
-                "我想組電腦",
-            ]
-        ) or (
-            any(k in ug_lower for k in ["電腦", "pc", "主機", "硬體"])
-            and any(k in ug_lower for k in ["配", "組", "菜單", "推薦", "預算", "買", "規格", "配置", "單子", "想要", "想買"])
-        )
-        is_casual_pc_mention = any(
-            k in ug_lower
-            for k in [
-                "我昨天買了",
-                "買了一台",
-                "買了新",
-                "已經買了",
-                "入手了",
-                "昨天買",
-                "為什麼會變慢",
-                "為什麼電腦",
-                "電腦中毒",
-            ]
-        )
-        if is_casual_pc_mention:
-            has_pc_intent = False
+        has_pc_intent = _has_pc_recommendation_intent(user_goal)
 
         has_store_intent = any(
             k in ug_lower
@@ -264,7 +308,18 @@ class MockDeterministicPlanningBackend(BasePlanningBackend):
             ]
         )
 
-        if is_sequential_combo and has_pc_intent and has_store_intent:
+        # 尋找可用之 PC 配單 A2A 技能
+        pc_skill = next(
+            (
+                s for s in capability_summary.a2a_skills
+                if s.get("id") == "pc_recommendation"
+                or any(k in s.get("id", "").lower() for k in ["pc", "build", "hardware", "recommend"])
+                or any(t.lower() in ["pc", "電腦", "組裝", "配單"] for t in s.get("tags", []))
+            ),
+            None,
+        )
+
+        if is_sequential_combo and has_pc_intent and has_store_intent and pc_skill:
             memory_target = "memory_store" if "memory_store" in capability_summary.local_capabilities else "store_build"
             return PlanStructuredOutput(
                 tasks=[
@@ -272,7 +327,7 @@ class MockDeterministicPlanningBackend(BasePlanningBackend):
                         step_id="step_1",
                         execution_type=ExecutionType.A2A,
                         goal=user_goal,
-                        target="pc_recommendation",
+                        target=pc_skill.get("id", "pc_recommendation"),
                         depends_on=[],
                     ),
                     PlannedTask(
@@ -286,7 +341,6 @@ class MockDeterministicPlanningBackend(BasePlanningBackend):
             )
 
         # 2. 直接記憶請求 (Direct Remember Request)
-        # 例如：「記住我喜歡深色模式」、「請幫我記住我的生日是 8/16」
         if has_store_intent and not is_sequential_combo:
             if "memory_store" in capability_summary.local_capabilities:
                 return PlanStructuredOutput(
@@ -314,8 +368,22 @@ class MockDeterministicPlanningBackend(BasePlanningBackend):
                     ]
                 )
 
-        # 3. 單一 A2A 技能比對
-        if not is_casual_pc_mention:
+        # 3. 單一 A2A 技能語意比對
+        if has_pc_intent and pc_skill:
+            return PlanStructuredOutput(
+                tasks=[
+                    PlannedTask(
+                        step_id="step_1",
+                        execution_type=ExecutionType.A2A,
+                        goal=user_goal,
+                        target=pc_skill.get("id", "pc_recommendation"),
+                        depends_on=[],
+                    )
+                ]
+            )
+
+        # 檢查其他一般 A2A 技能標籤比對
+        if not _is_non_recommendation_pc_query(user_goal):
             for skill in capability_summary.a2a_skills:
                 skill_id = skill.get("id", "").lower()
                 skill_name = skill.get("name", "").lower()
@@ -323,8 +391,7 @@ class MockDeterministicPlanningBackend(BasePlanningBackend):
                 if (
                     (skill_id and skill_id in ug_lower)
                     or (skill_name and skill_name in ug_lower)
-                    or (has_pc_intent and any(k in skill_id for k in ["pc", "build", "hardware", "recommend"]))
-                    or any(t in ug_lower for t in tags if len(t) > 2 or t == "pc" or t == "組裝" or t == "配單")
+                    or any(t in ug_lower for t in tags if len(t) > 2)
                 ):
                     return PlanStructuredOutput(
                         tasks=[
@@ -428,15 +495,17 @@ Your single job is to analyze the user's explicit request and produce the SMALLE
 
 3. MCP TOOL ROUTING (NECESSITY-BASED):
    - MCP tools MUST be used ONLY when the user's request explicitly requires external/real-time tool data (e.g. "現在幾點" -> `get_current_time`, "查看行事曆" -> calendar tools).
-   - NEVER call `get_current_time` or other tools for casual conversation, hunger, fatigue, or feelings, even if words like "現在" or "今天" appear incidentally in casual speech (e.g. "我肚子很餓", "我今天心情很好" MUST NOT call time tools).
+   - NEVER call `get_current_time` or other tools for casual conversation, hunger, fatigue, or feelings, even if words like "現在" or "今天" appear incidentally in casual speech.
 
 4. SIDE-EFFECT RESTRICTION (STRICT):
    - Capabilities with side effects (such as `memory_store` for persisting memory, writing database records, or sending external messages) MUST NEVER be generated unless the user EXPLICITLY commands to remember/save/store/record the information using words like "記住", "幫我存下來", "儲存", "記得", "remember", "save", "store".
    - NEVER add `memory_store` as a helpful closing step unless explicitly requested.
 
 5. A2A SPECIALIZED AGENTS:
-   - Route to `A2A` ONLY when the request genuinely matches a specialized peer agent skill (e.g. "幫我配一台四萬元遊戲電腦" -> A2A skill `pc_recommendation`).
-   - Casual mentions or general troubleshooting (e.g. "我昨天買了一台電腦", "我的電腦最近很慢") do NOT match PC build recommendation skills and MUST route to `LOCAL` `general_qa`.
+   - Route to `A2A` ONLY when the request genuinely matches an available skill in `【可用 A2A 專門代理人技能 (Skills)】`.
+   - PC BUILD & RECOMMENDATION: Requests to recommend, build, configure, or budget for a PC/desktop/workstation/gaming rig (e.g. "我想組一台四萬塊的電腦", "我想配電腦", "幫我組一台四萬的電腦", "四萬元預算幫我配一台電腦", "推薦一台工作用電腦", "幫我配遊戲主機") match the `pc_recommendation` skill.
+   - NON-RECOMMENDATIONS: Casual PC mentions, past purchases, troubleshooting, concept explanations, or programming questions (e.g. "我昨天買了一台電腦", "我的電腦壞了", "電腦是怎麼運作的", "Python 可以在電腦上跑嗎") do NOT match PC build recommendation skills and MUST route to `LOCAL` `general_qa`.
+   - If an A2A skill is NOT listed in `【可用 A2A 專門代理人技能】`, you MUST NOT invent it and MUST route to `LOCAL` `general_qa`.
 
 === FEW-SHOT EXAMPLES ===
 - User: "我肚子很餓"
@@ -454,11 +523,29 @@ Your single job is to analyze the user's explicit request and produce the SMALLE
 - User: "記住我喜歡深色模式"
   Plan: [PlannedTask(step_id="step_1", execution_type="local", target="memory_store", goal="記住我喜歡深色模式", parameters={{"content": "我喜歡深色模式"}})]
 
-- User: "幫我配一台四萬元遊戲電腦"
-  Plan: [PlannedTask(step_id="step_1", execution_type="a2a", target="pc_recommendation", goal="幫我配一台四萬元遊戲電腦")]
+- User: "我想組一台四萬塊的電腦"
+  Plan: [PlannedTask(step_id="step_1", execution_type="a2a", target="pc_recommendation", goal="我想組一台四萬塊的電腦")]
+
+- User: "我想配電腦"
+  Plan: [PlannedTask(step_id="step_1", execution_type="a2a", target="pc_recommendation", goal="我想配電腦")]
+
+- User: "幫我配遊戲主機"
+  Plan: [PlannedTask(step_id="step_1", execution_type="a2a", target="pc_recommendation", goal="幫我配遊戲主機")]
+
+- User: "推薦一台工作用電腦"
+  Plan: [PlannedTask(step_id="step_1", execution_type="a2a", target="pc_recommendation", goal="推薦一台工作用電腦")]
 
 - User: "我昨天買了一台電腦"
   Plan: [PlannedTask(step_id="step_1", execution_type="local", target="general_qa", goal="我昨天買了一台電腦")]
+
+- User: "我的電腦壞了"
+  Plan: [PlannedTask(step_id="step_1", execution_type="local", target="general_qa", goal="我的電腦壞了")]
+
+- User: "電腦是怎麼運作的"
+  Plan: [PlannedTask(step_id="step_1", execution_type="local", target="general_qa", goal="電腦是怎麼運作的")]
+
+- User: "Python 可以在電腦上跑嗎"
+  Plan: [PlannedTask(step_id="step_1", execution_type="local", target="general_qa", goal="Python 可以在電腦上跑嗎")]
 
 - User: "幫我配一台四萬元遊戲電腦，然後記住這套配置"
   Plan: [
@@ -543,10 +630,16 @@ class Planner:
         self,
         goal: str,
         tasks: List[PlannedTask],
+        capability_summary: Optional[CapabilitySummary] = None,
     ) -> List[PlannedTask]:
-        """通用安全與語意驗證：過濾未經使用者明確要求的副作用（如 memory_store）與無關工具調用."""
+        """通用安全與語意驗證：過濾未經使用者明確要求的副作用（如 memory_store）、無關工具調用與不存在之 A2A 技能目標."""
+        caps = capability_summary or self.capability_summary
         has_memory = _has_explicit_memory_intent(goal)
         has_time = _has_explicit_time_intent(goal)
+
+        available_a2a_skill_ids = {
+            s.get("id") for s in caps.a2a_skills if isinstance(s, dict) and s.get("id")
+        }
 
         sanitized: List[PlannedTask] = []
         filtered_step_ids: Set[str] = set()
@@ -572,12 +665,21 @@ class Planner:
                 filtered_step_ids.add(t.step_id)
                 continue
 
+            # 3. 檢查 A2A 技能目標是否存在於可用技能清單中 (避免幻覺產生不存在之 target)
+            if t.execution_type == ExecutionType.A2A:
+                if t.target not in available_a2a_skill_ids:
+                    logger.warning(
+                        f"[Planner] Filtered unverified A2A target '{t.target}' not in available skills (goal: '{goal}')"
+                    )
+                    filtered_step_ids.add(t.step_id)
+                    continue
+
             sanitized.append(t)
 
         # 若所有任務皆被過濾（例如原 plan 僅有 unrequested time + unrequested memory），回退為單一 LOCAL general_qa 任務
         if not sanitized:
             logger.info("[Planner] All planned tasks were unrequested/invalid; sanitized to single LOCAL task")
-            default_target = "general_qa" if "general_qa" in self.capability_summary.local_capabilities else None
+            default_target = "general_qa" if "general_qa" in caps.local_capabilities else None
             return [
                 PlannedTask(
                     step_id="step_1",
@@ -595,11 +697,16 @@ class Planner:
 
         return sanitized
 
-    def plan(self, user_goal: str) -> TaskPlan:
+    def plan(
+        self,
+        user_goal: str,
+        capability_summary: Optional[CapabilitySummary] = None,
+    ) -> TaskPlan:
         """將使用者目標規劃為嚴格驗證之 TaskPlan (支援 1..5 個子任務與相依關係).
 
         Args:
             user_goal: 使用者自然語言請求
+            capability_summary: 可選傳入即時能力摘要 (若未提供則使用實例持有之 snapshot)
 
         Returns:
             驗證合法之 TaskPlan 實體
@@ -608,10 +715,11 @@ class Planner:
         if not clean_goal:
             clean_goal = "空任務請求"
 
+        caps = capability_summary or self.capability_summary
         logger.info(f"[Planner] Planning request for goal: '{clean_goal}'")
 
         try:
-            output = self.backend.generate_plan_output(clean_goal, self.capability_summary)
+            output = self.backend.generate_plan_output(clean_goal, caps)
             raw_planned_tasks = output.tasks
 
             if not raw_planned_tasks:
@@ -621,7 +729,7 @@ class Planner:
                 raise ValueError(f"Planner 產出任務數量超過上限 ({len(raw_planned_tasks)} > {MAX_PLAN_TASKS})")
 
             # 0. 執行通用安全與語意驗證 (Smallest Valid Plan / Side-effect Guardrail)
-            planned_tasks = self._validate_and_sanitize_tasks(clean_goal, raw_planned_tasks)
+            planned_tasks = self._validate_and_sanitize_tasks(clean_goal, raw_planned_tasks, caps)
 
             # 1. 檢查 step_id 重複
             seen_step_ids: Set[str] = set()
@@ -679,7 +787,7 @@ class Planner:
             logger.info("[Planner] Falling back to safe single LOCAL plan")
 
             # Fallback 策略：建立單一 LOCAL 任務
-            fallback_target = "general_qa" if "general_qa" in self.capability_summary.local_capabilities else None
+            fallback_target = "general_qa" if "general_qa" in caps.local_capabilities else None
             fallback_task = SubTask(
                 task_id=f"task_{uuid.uuid4().hex[:8]}",
                 execution_type=ExecutionType.LOCAL,

@@ -159,9 +159,15 @@ class OrchestrationService:
         )
 
     def _build_capability_summary(self) -> CapabilitySummary:
-        """動態彙整當前系統已知可用能力清單."""
+        """動態彙整當前系統已知可用能力清單 (包含動態外部 Peer 探索與 MCP 工具快照)."""
         a2a_skills = []
         if self.discovery_service:
+            # 檢查並探索尚未完成註冊之外部已配置 Peers (例如啟動後才上線的 PCforge)
+            try:
+                self.discovery_service.refresh_unregistered_peers()
+            except Exception as e:
+                logger.debug(f"[OrchestrationService] Dynamic peer discovery check: {e}")
+
             peers = self.discovery_service.list_agents()
             for p in peers:
                 for s in p.skills:
@@ -201,7 +207,7 @@ class OrchestrationService:
         """執行 LangGraph 調度週期並回傳完整具名 OrchestrationResponse (Single Routing Authority).
 
         流程：
-        User Messages ➔ Extract Goal ➔ Planner ➔ Orchestrator ➔ ResultAggregator ➔ Final Synthesis ➔ OrchestrationResponse
+        User Messages ➔ Extract Goal ➔ Dynamic Capabilities ➔ Planner ➔ Orchestrator ➔ ResultAggregator ➔ Final Synthesis ➔ OrchestrationResponse
         """
         # 建立內部事件收集器以保留完整軌跡，並支援向外部 event_sink (如 SSE 即時串流) 廣播事件
         collector = ListEventSink()
@@ -216,7 +222,11 @@ class OrchestrationService:
             )
         )
 
-        # 1. 任務規劃 (Planning)
+        # 1. 動態建立當前能力快照 (確保能感知即時上線之外部 Peer 或 MCP 工具)
+        current_caps = self._build_capability_summary()
+        self.planner.set_capability_summary(current_caps)
+
+        # 2. 任務規劃 (Planning)
         active_sink.emit(
             OrchestrationEvent(
                 event_type=OrchestrationEventType.PLANNING_STARTED,
@@ -224,7 +234,7 @@ class OrchestrationService:
                 message="Planner started analyzing intent",
             )
         )
-        plan: TaskPlan = self.planner.plan(user_goal)
+        plan: TaskPlan = self.planner.plan(user_goal, capability_summary=current_caps)
         logger.info(f"[OrchestrationService] Planner generated plan: {plan.plan_id} with {len(plan.tasks)} tasks")
         active_sink.emit(
             OrchestrationEvent(

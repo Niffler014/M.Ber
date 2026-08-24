@@ -271,3 +271,36 @@ class AgentDiscoveryService:
                 print(f"⚠️ [A2A Discovery] 自動探索 Peer 失敗 ({peer.get('name', url)}): {e}")
         return discovered
 
+    def refresh_unregistered_peers(
+        self,
+        transport: Optional[CardTransportHandler] = None,
+        timeout: float = 2.0,
+    ) -> List[AgentCard]:
+        """檢查設定檔中已登記的外部 peers，若尚未在註冊表中則嘗試連線探索.
+
+        Args:
+            transport: 傳輸函式 (可選，供測試注入)
+            timeout: 超時秒數 (預設 2.0 秒，避免阻塞即時對話流程)
+
+        Returns:
+            新探索並註冊之 AgentCard 清單
+        """
+        discovered: List[AgentCard] = []
+        registered_urls = {card.url.rstrip("/") for card in self._registry.values() if card.url}
+        registered_names = set(self._registry.keys())
+
+        for peer in self._peers:
+            name = peer.get("name")
+            url = peer.get("url")
+            if not url:
+                continue
+            clean_url = url.rstrip("/")
+            if name not in registered_names and clean_url not in registered_urls:
+                try:
+                    card = self.discover_peer(url, transport=transport, timeout=timeout)
+                    discovered.append(card)
+                except Exception:
+                    # 外部 Peer 若仍離線則靜默忽略，不影響主系統運行
+                    pass
+        return discovered
+
