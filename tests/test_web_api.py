@@ -232,8 +232,15 @@ def test_web_app_uses_injected_orchestration_service() -> None:
     assert custom_service.invoke_with_details.called
 
 
-def test_chat_api_local_workflow() -> None:
+def test_chat_api_local_workflow(monkeypatch) -> None:
     """整合測試：使用真實 OrchestrationService 進行本地推理解析工作流程."""
+    monkeypatch.setenv("MODEL_PROVIDER", "")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
     # 建立無外部依賴之 OrchestrationService 進行確定性推理
     real_service = OrchestrationService()
     app = create_web_app(orchestration_service=real_service)
@@ -323,11 +330,18 @@ def test_chat_api_uses_real_local_reasoning_result() -> None:
     assert "已為您處理完成" not in data["message"]
 
 
-def test_chat_api_pc_request_routes_a2a() -> None:
+def test_chat_api_pc_request_routes_a2a(monkeypatch) -> None:
     """驗證口語化配電腦請求經 Web API 發送後，正確規劃至 A2A 並調用外部代理人."""
     from app.a2a.discovery import AgentDiscoveryService
     from app.a2a.models import AgentCard, AgentSkill
     from tests.test_pcforge_a2a import fake_pcforge_rpc_transport
+
+    monkeypatch.setenv("MODEL_PROVIDER", "")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
     discovery = AgentDiscoveryService(config_path="non_existent.json")
     discovery.register_agent(

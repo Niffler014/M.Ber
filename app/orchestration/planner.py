@@ -59,6 +59,64 @@ class PlanStructuredOutput(BaseModel):
     )
 
 
+LOCAL_CAPABILITY_DESCRIPTIONS: Dict[str, str] = {
+    "general_qa": "Default capability for casual conversation, explanations, reasoning, advice, brainstorming, and generic questions that do not require external tools or agents. (No side effects).",
+    "memory_store": "Persist information into long-term memory. STRICT RESTRICTION: Use ONLY when the user EXPLICITLY commands to remember, save, or store information (e.g. '記住...', '幫我存下來', 'remember this'). This causes a side effect and MUST NEVER be used for casual statements or unrequested helpful storage.",
+    "agent_reasoning": "Structured local analysis and task reasoning.",
+}
+
+
+def _has_explicit_memory_intent(text: str) -> bool:
+    """檢查文字是否包含明確儲存/記憶意圖 (非推測性)."""
+    t_lower = text.lower()
+    return any(
+        kw in t_lower
+        for kw in [
+            "記住",
+            "幫我記住",
+            "幫我保存",
+            "存下來",
+            "儲存",
+            "記錄",
+            "記下",
+            "記得",
+            "記起",
+            "remember",
+            "store",
+            "save",
+            "memorize",
+            "keep in mind",
+        ]
+    )
+
+
+def _has_explicit_time_intent(text: str) -> bool:
+    """檢查文字是否包含明確時間/日期查詢意圖."""
+    t_lower = text.lower()
+    return any(
+        kw in t_lower
+        for kw in [
+            "幾點",
+            "現在幾點",
+            "目前幾點",
+            "現在時間",
+            "當前時間",
+            "目前時間",
+            "系統時間",
+            "今天日期",
+            "現在日期",
+            "幾月幾號",
+            "星期幾",
+            "禮拜幾",
+            "what time",
+            "current time",
+            "current date",
+            "what is the date",
+            "what day is it",
+        ]
+    )
+
+
 class CapabilitySummary(BaseModel):
     """可用能力摘要 (Capability Awareness Snapshot)."""
 
@@ -76,8 +134,23 @@ class CapabilitySummary(BaseModel):
     )
 
     def to_prompt_text(self) -> str:
-        """轉換為 Prompt 注入用之清晰文字摘要."""
+        """轉換為 Prompt 注入用之清晰文字摘要 (含語意與副作用約束說明)."""
         lines = []
+        if self.local_capabilities:
+            lines.append("【可用本地能力 (Local Capabilities)】:")
+            for cap in self.local_capabilities:
+                desc = LOCAL_CAPABILITY_DESCRIPTIONS.get(cap, "Local execution capability.")
+                lines.append(f"  - capability: '{cap}', desc: '{desc}'")
+        else:
+            lines.append("【可用本地能力】: 無")
+
+        if self.mcp_tools:
+            lines.append("【可用 MCP 外部工具 (Tools)】:")
+            for t in self.mcp_tools:
+                lines.append(f"  - tool_name: '{t.get('name')}', desc: '{t.get('description', '')}'")
+        else:
+            lines.append("【可用 MCP 工具】: 無")
+
         if self.a2a_skills:
             lines.append("【可用 A2A 專門代理人技能 (Skills)】:")
             for s in self.a2a_skills:
@@ -87,16 +160,6 @@ class CapabilitySummary(BaseModel):
                 lines.append(f"  - skill_id: '{skill_id}', name: '{skill_name}', tags: {tags}")
         else:
             lines.append("【可用 A2A 技能】: 無")
-
-        if self.mcp_tools:
-            lines.append("【可用 MCP 工具 (Tools)】:")
-            for t in self.mcp_tools:
-                lines.append(f"  - tool_name: '{t.get('name')}', desc: '{t.get('description', '')}'")
-        else:
-            lines.append("【可用 MCP 工具】: 無")
-
-        if self.local_capabilities:
-            lines.append(f"【可用本地能力 (Local)】: {', '.join(self.local_capabilities)}")
 
         return "\n".join(lines)
 
@@ -224,19 +287,32 @@ class MockDeterministicPlanningBackend(BasePlanningBackend):
 
         # 2. 直接記憶請求 (Direct Remember Request)
         # 例如：「記住我喜歡深色模式」、「請幫我記住我的生日是 8/16」
-        if has_store_intent and not is_sequential_combo and ("memory_store" in capability_summary.local_capabilities):
-            return PlanStructuredOutput(
-                tasks=[
-                    PlannedTask(
-                        step_id="step_1",
-                        execution_type=ExecutionType.LOCAL,
-                        goal=user_goal,
-                        target="memory_store",
-                        parameters={"content": user_goal},
-                        depends_on=[],
-                    )
-                ]
-            )
+        if has_store_intent and not is_sequential_combo:
+            if "memory_store" in capability_summary.local_capabilities:
+                return PlanStructuredOutput(
+                    tasks=[
+                        PlannedTask(
+                            step_id="step_1",
+                            execution_type=ExecutionType.LOCAL,
+                            goal=user_goal,
+                            target="memory_store",
+                            parameters={"content": user_goal},
+                            depends_on=[],
+                        )
+                    ]
+                )
+            else:
+                return PlanStructuredOutput(
+                    tasks=[
+                        PlannedTask(
+                            step_id="step_1",
+                            execution_type=ExecutionType.LOCAL,
+                            goal=user_goal,
+                            target=None,
+                            depends_on=[],
+                        )
+                    ]
+                )
 
         # 3. 單一 A2A 技能比對
         if not is_casual_pc_mention:
@@ -263,7 +339,7 @@ class MockDeterministicPlanningBackend(BasePlanningBackend):
                     )
 
         # 4. 單一 MCP 工具比對
-        has_time_intent = any(k in ug_lower for k in ["現在幾點", "幾點", "時間", "time", "clock"])
+        has_time_intent = _has_explicit_time_intent(user_goal)
         has_cal_intent = any(k in ug_lower for k in ["行事曆", "calendar", "行程", "預約", "開會", "events"])
         has_note_intent = any(k in ug_lower for k in ["筆記", "notes", "note", "備忘"])
 
@@ -319,13 +395,14 @@ class MockDeterministicPlanningBackend(BasePlanningBackend):
                 )
 
         # 5. 預設單一 LOCAL 任務
+        default_target = "general_qa" if "general_qa" in capability_summary.local_capabilities else None
         return PlanStructuredOutput(
             tasks=[
                 PlannedTask(
                     step_id="step_1",
                     execution_type=ExecutionType.LOCAL,
                     goal=user_goal,
-                    target=None,
+                    target=default_target,
                     depends_on=[],
                 )
             ]
@@ -335,23 +412,61 @@ class MockDeterministicPlanningBackend(BasePlanningBackend):
 class LangChainStructuredPlanningBackend(BasePlanningBackend):
     """基於 LangChain Chat Model + Structured Output 之真實規劃後端."""
 
-    SYSTEM_PROMPT_TEMPLATE = """You are M.Ber's task planner.
+    SYSTEM_PROMPT_TEMPLATE = """You are M.Ber's Task Planner.
 
-Your job is to classify and structure the user's request into a sequential task plan.
-You may create multiple tasks ONLY when the user's request genuinely requires multiple capabilities or sequential steps (e.g. 'Do X, then remember the result').
-Do NOT decompose simple requests unnecessarily.
-Prefer the smallest valid plan.
-Maximum tasks allowed: 5.
-Do NOT invent unavailable agents or tools.
-Use symbolic step_id like 'step_1', 'step_2'. Dependencies must refer ONLY to valid step_id declared in the same plan.
-Do NOT create dependency cycles.
-Do NOT execute tasks.
+Your single job is to analyze the user's explicit request and produce the SMALLEST VALID sequential task plan (`PlanStructuredOutput`).
 
-Execution Types:
-- LOCAL: General QA, explanations, reasoning, or local capabilities (e.g. 'memory_store' for storing facts or previous step outputs).
-- MCP: Tool operations requiring external services (e.g. database, calendar, time queries).
-- A2A: Delegating to specialized external agents when a matching skill is available.
+=== CRITICAL PLANNING RULES ===
+1. SMALLEST VALID PLAN RULE:
+   - Most user requests require EXACTLY ONE task.
+   - Do NOT add helpful extra steps, unrequested tool lookups, or proactive memory writes.
+   - You may create multiple tasks (maximum 5) ONLY when the user explicitly requests multiple actions (e.g. "Do X and then do Y") or when an explicitly requested action strictly depends on the output of a preceding capability.
 
+2. DEFAULT TO LOCAL `general_qa`:
+   - `LOCAL` with target `general_qa` is the DEFAULT semantic capability.
+   - Casual conversation, feelings, greetings (e.g. "我肚子很餓", "你好", "我今天很累"), explanations (e.g. "dependency injection 是什麼"), opinions, advice, and general knowledge questions MUST be planned as a SINGLE `LOCAL` task with target `general_qa`.
+
+3. MCP TOOL ROUTING (NECESSITY-BASED):
+   - MCP tools MUST be used ONLY when the user's request explicitly requires external/real-time tool data (e.g. "現在幾點" -> `get_current_time`, "查看行事曆" -> calendar tools).
+   - NEVER call `get_current_time` or other tools for casual conversation, hunger, fatigue, or feelings, even if words like "現在" or "今天" appear incidentally in casual speech (e.g. "我肚子很餓", "我今天心情很好" MUST NOT call time tools).
+
+4. SIDE-EFFECT RESTRICTION (STRICT):
+   - Capabilities with side effects (such as `memory_store` for persisting memory, writing database records, or sending external messages) MUST NEVER be generated unless the user EXPLICITLY commands to remember/save/store/record the information using words like "記住", "幫我存下來", "儲存", "記得", "remember", "save", "store".
+   - NEVER add `memory_store` as a helpful closing step unless explicitly requested.
+
+5. A2A SPECIALIZED AGENTS:
+   - Route to `A2A` ONLY when the request genuinely matches a specialized peer agent skill (e.g. "幫我配一台四萬元遊戲電腦" -> A2A skill `pc_recommendation`).
+   - Casual mentions or general troubleshooting (e.g. "我昨天買了一台電腦", "我的電腦最近很慢") do NOT match PC build recommendation skills and MUST route to `LOCAL` `general_qa`.
+
+=== FEW-SHOT EXAMPLES ===
+- User: "我肚子很餓"
+  Plan: [PlannedTask(step_id="step_1", execution_type="local", target="general_qa", goal="我肚子很餓")]
+
+- User: "你好"
+  Plan: [PlannedTask(step_id="step_1", execution_type="local", target="general_qa", goal="你好")]
+
+- User: "dependency injection 是什麼"
+  Plan: [PlannedTask(step_id="step_1", execution_type="local", target="general_qa", goal="dependency injection 是什麼")]
+
+- User: "現在幾點"
+  Plan: [PlannedTask(step_id="step_1", execution_type="mcp", target="get_current_time", goal="查詢現在時間")]
+
+- User: "記住我喜歡深色模式"
+  Plan: [PlannedTask(step_id="step_1", execution_type="local", target="memory_store", goal="記住我喜歡深色模式", parameters={{"content": "我喜歡深色模式"}})]
+
+- User: "幫我配一台四萬元遊戲電腦"
+  Plan: [PlannedTask(step_id="step_1", execution_type="a2a", target="pc_recommendation", goal="幫我配一台四萬元遊戲電腦")]
+
+- User: "我昨天買了一台電腦"
+  Plan: [PlannedTask(step_id="step_1", execution_type="local", target="general_qa", goal="我昨天買了一台電腦")]
+
+- User: "幫我配一台四萬元遊戲電腦，然後記住這套配置"
+  Plan: [
+    PlannedTask(step_id="step_1", execution_type="a2a", target="pc_recommendation", goal="幫我配一台四萬元遊戲電腦"),
+    PlannedTask(step_id="step_2", execution_type="local", target="memory_store", goal="儲存電腦配置", depends_on=["step_1"])
+  ]
+
+=== AVAILABLE CAPABILITIES ===
 {capabilities_text}
 """
 
@@ -424,6 +539,62 @@ class Planner:
         """更新可用能力摘要資訊."""
         self.capability_summary = summary
 
+    def _validate_and_sanitize_tasks(
+        self,
+        goal: str,
+        tasks: List[PlannedTask],
+    ) -> List[PlannedTask]:
+        """通用安全與語意驗證：過濾未經使用者明確要求的副作用（如 memory_store）與無關工具調用."""
+        has_memory = _has_explicit_memory_intent(goal)
+        has_time = _has_explicit_time_intent(goal)
+
+        sanitized: List[PlannedTask] = []
+        filtered_step_ids: Set[str] = set()
+
+        for t in tasks:
+            # 1. 檢查 memory_store 副作用
+            if t.target in ("memory_store", "store_build") and not has_memory:
+                logger.warning(
+                    f"[Planner] Filtered unrequested side-effect task '{t.target}' (goal: '{goal}')"
+                )
+                filtered_step_ids.add(t.step_id)
+                continue
+
+            # 2. 檢查時間工具是否具備明確查詢意圖
+            if (
+                t.execution_type == ExecutionType.MCP
+                and (t.target or "").lower() in ("get_current_time", "current_time")
+                and not has_time
+            ):
+                logger.warning(
+                    f"[Planner] Filtered unrequested time tool '{t.target}' (goal: '{goal}')"
+                )
+                filtered_step_ids.add(t.step_id)
+                continue
+
+            sanitized.append(t)
+
+        # 若所有任務皆被過濾（例如原 plan 僅有 unrequested time + unrequested memory），回退為單一 LOCAL general_qa 任務
+        if not sanitized:
+            logger.info("[Planner] All planned tasks were unrequested/invalid; sanitized to single LOCAL task")
+            default_target = "general_qa" if "general_qa" in self.capability_summary.local_capabilities else None
+            return [
+                PlannedTask(
+                    step_id="step_1",
+                    execution_type=ExecutionType.LOCAL,
+                    goal=goal,
+                    target=default_target,
+                    depends_on=[],
+                )
+            ]
+
+        # 僅清理被過濾掉的 step_id (若依賴未曾存在之未知 step_id 則保留以觸發後續的 unknown dependency 驗證與 fallback)
+        if filtered_step_ids:
+            for t in sanitized:
+                t.depends_on = [dep for dep in t.depends_on if dep not in filtered_step_ids]
+
+        return sanitized
+
     def plan(self, user_goal: str) -> TaskPlan:
         """將使用者目標規劃為嚴格驗證之 TaskPlan (支援 1..5 個子任務與相依關係).
 
@@ -441,13 +612,16 @@ class Planner:
 
         try:
             output = self.backend.generate_plan_output(clean_goal, self.capability_summary)
-            planned_tasks = output.tasks
+            raw_planned_tasks = output.tasks
 
-            if not planned_tasks:
+            if not raw_planned_tasks:
                 raise ValueError("Planner 產出之任務清單不可為空")
 
-            if len(planned_tasks) > MAX_PLAN_TASKS:
-                raise ValueError(f"Planner 產出任務數量超過上限 ({len(planned_tasks)} > {MAX_PLAN_TASKS})")
+            if len(raw_planned_tasks) > MAX_PLAN_TASKS:
+                raise ValueError(f"Planner 產出任務數量超過上限 ({len(raw_planned_tasks)} > {MAX_PLAN_TASKS})")
+
+            # 0. 執行通用安全與語意驗證 (Smallest Valid Plan / Side-effect Guardrail)
+            planned_tasks = self._validate_and_sanitize_tasks(clean_goal, raw_planned_tasks)
 
             # 1. 檢查 step_id 重複
             seen_step_ids: Set[str] = set()
@@ -505,11 +679,12 @@ class Planner:
             logger.info("[Planner] Falling back to safe single LOCAL plan")
 
             # Fallback 策略：建立單一 LOCAL 任務
+            fallback_target = "general_qa" if "general_qa" in self.capability_summary.local_capabilities else None
             fallback_task = SubTask(
                 task_id=f"task_{uuid.uuid4().hex[:8]}",
                 execution_type=ExecutionType.LOCAL,
                 goal=clean_goal,
-                target=None,
+                target=fallback_target,
                 parameters={},
                 depends_on=[],
             )

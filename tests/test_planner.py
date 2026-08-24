@@ -114,7 +114,7 @@ def test_planner_invalid_structured_output_falls_back(mock_capabilities: Capabil
     assert isinstance(plan, TaskPlan)
     assert len(plan.tasks) == 1
     assert plan.tasks[0].execution_type == ExecutionType.LOCAL
-    assert plan.tasks[0].target is None
+    assert plan.tasks[0].target in (None, "general_qa")
     assert plan.user_goal == "這是一個會觸發後端錯誤的請求"
 
 
@@ -155,7 +155,7 @@ def test_planner_does_not_invent_unavailable_a2a_target():
 
     plan = planner.plan("幫我訂明天去東京的機票")
     assert plan.tasks[0].execution_type == ExecutionType.LOCAL
-    assert plan.tasks[0].target is None
+    assert plan.tasks[0].target in (None, "general_qa")
 
 
 # ============================================================================
@@ -286,7 +286,7 @@ def test_planner_routes_casual_chat_to_local(mock_capabilities: CapabilitySummar
 
     assert len(plan.tasks) == 1
     assert plan.tasks[0].execution_type == ExecutionType.LOCAL
-    assert plan.tasks[0].target is None
+    assert plan.tasks[0].target in (None, "general_qa")
 
 
 def test_planner_routes_natural_pc_request_to_a2a(mock_capabilities: CapabilitySummary):
@@ -405,11 +405,18 @@ def test_production_web_uses_single_composed_orchestration_stack():
     assert service.mcp_manager is shared_mcp
 
 
-def test_a2a_discovery_failure_does_not_break_local_chat():
+def test_a2a_discovery_failure_does_not_break_local_chat(monkeypatch):
     """驗證即使 A2A 發現失敗（例如網路異常），OrchestrationService 仍可正常初始化並提供 LOCAL 服務."""
     from unittest.mock import patch, MagicMock
     from langchain_core.messages import HumanMessage
     from app.orchestration.service import OrchestrationService
+
+    monkeypatch.setenv("MODEL_PROVIDER", "")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
     with patch("app.orchestration.service.AgentDiscoveryService") as MockDiscoveryCls:
         mock_instance = MagicMock()
@@ -459,7 +466,7 @@ def test_capability_summary_built_after_discovery():
         assert any(s.get("id") == "pc_recommendation" for s in service.planner.capability_summary.a2a_skills)
 
 
-def test_production_planner_backend_selection_is_explicit(caplog):
+def test_production_planner_backend_selection_is_explicit(caplog, monkeypatch):
     """驗證 Planner 啟動時明確記錄所選用的後端 (structured_llm 或 deterministic_offline)."""
     import logging
     from tests.test_local_reasoning import FakeListChatModel
@@ -470,8 +477,220 @@ def test_production_planner_backend_selection_is_explicit(caplog):
         assert any("backend=structured_llm" in record.message for record in caplog.records)
 
     caplog.clear()
+    monkeypatch.setenv("MODEL_PROVIDER", "")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     with caplog.at_level(logging.INFO, logger="mber.orchestration"):
-        s2 = OrchestrationService(llm=None)
+        s2 = OrchestrationService()
         assert any("backend=deterministic_offline" in record.message for record in caplog.records)
+
+
+# ============================================================================
+# P8-03.5 Planner Routing Fix 強化測試矩陣 (Core Routing Matrix & Regression)
+# ============================================================================
+
+def test_planner_hungry_routes_local(mock_capabilities: CapabilitySummary):
+    """驗證「我肚子很餓」產出恰好 1 個 LOCAL general_qa 任務，絕不調用時間或記憶庫."""
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("我肚子很餓")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+    assert plan.tasks[0].target in (None, "general_qa")
+
+
+def test_planner_greeting_routes_local(mock_capabilities: CapabilitySummary):
+    """驗證問候語「你好」產出 1 個 LOCAL 任務."""
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("你好")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+
+
+def test_planner_dependency_injection_routes_local(mock_capabilities: CapabilitySummary):
+    """驗證技術知識問題「dependency injection 是什麼」產出 1 個 LOCAL 任務."""
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("dependency injection 是什麼")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+
+
+def test_planner_current_time_routes_mcp(mock_capabilities: CapabilitySummary):
+    """驗證「現在幾點？」產出 1 個 MCP 工具調用任務 (get_current_time)."""
+    mock_capabilities.mcp_tools.append({"name": "get_current_time", "description": "取得系統時間"})
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("現在幾點？")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.MCP
+    assert plan.tasks[0].target == "get_current_time"
+
+
+def test_planner_current_date_routes_mcp(mock_capabilities: CapabilitySummary):
+    """驗證「今天日期是什麼」產出 1 個 MCP 工具調用任務 (get_current_time)."""
+    mock_capabilities.mcp_tools.append({"name": "get_current_time", "description": "取得系統時間"})
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("今天日期是什麼")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.MCP
+    assert plan.tasks[0].target == "get_current_time"
+
+
+def test_planner_pc_build_routes_a2a(mock_capabilities: CapabilitySummary):
+    """驗證「幫我配一台四萬元遊戲電腦」產出 1 個 A2A 技能任務."""
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("幫我配一台四萬元遊戲電腦")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.A2A
+    assert plan.tasks[0].target == "pc_recommendation"
+
+
+def test_planner_pc_casual_mention_routes_local(mock_capabilities: CapabilitySummary):
+    """驗證「我昨天買了一台電腦」作為生活陳述句，產出 1 個 LOCAL 任務."""
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("我昨天買了一台電腦")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+
+
+def test_planner_explicit_remember_routes_memory(mock_capabilities: CapabilitySummary):
+    """驗證具備明確記憶指令「記住我喜歡深色模式」產出 1 個 LOCAL memory_store 任務."""
+    mock_capabilities.local_capabilities.append("memory_store")
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("記住我喜歡深色模式")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+    assert plan.tasks[0].target == "memory_store"
+
+
+def test_planner_pc_then_remember_routes_a2a_memory(mock_capabilities: CapabilitySummary):
+    """驗證「幫我配一台 40000 元遊戲電腦，然後記住這套配置」循序兩步驟 (A2A -> memory_store)."""
+    mock_capabilities.local_capabilities.append("memory_store")
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("幫我配一台 40000 元遊戲電腦，然後記住這套配置")
+
+    assert len(plan.tasks) == 2
+    assert plan.tasks[0].execution_type == ExecutionType.A2A
+    assert plan.tasks[1].execution_type == ExecutionType.LOCAL
+    assert plan.tasks[1].target in ("memory_store", "store_build")
+    assert plan.tasks[1].depends_on == [plan.tasks[0].task_id]
+
+
+def test_planner_does_not_add_unrequested_memory_side_effect(mock_capabilities: CapabilitySummary):
+    """【關鍵回歸測試】：驗證「我肚子很餓」絕不包含 memory_store 或 MCP 任務."""
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("我肚子很餓")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+    assert not any(t.target == "memory_store" for t in plan.tasks)
+    assert not any(t.execution_type == ExecutionType.MCP for t in plan.tasks)
+
+
+def test_planner_does_not_use_time_tool_for_hunger(mock_capabilities: CapabilitySummary):
+    """【MCP False Positive 測試】：驗證「我肚子很餓」不會因為時間聯想而觸發 get_current_time."""
+    mock_capabilities.mcp_tools.append({"name": "get_current_time", "description": "取得系統時間"})
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("我肚子很餓")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+    assert not any(t.target == "get_current_time" for t in plan.tasks)
+
+
+def test_planner_does_not_use_time_tool_for_today_casual_statement(mock_capabilities: CapabilitySummary):
+    """【MCP False Positive 測試】：驗證「我今天很累」不因含有「今天」而誤觸發 get_current_time."""
+    mock_capabilities.mcp_tools.append({"name": "get_current_time", "description": "取得系統時間"})
+    planner = Planner(capability_summary=mock_capabilities)
+    plan = planner.plan("我今天很累")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+    assert not any(t.target == "get_current_time" for t in plan.tasks)
+
+
+def test_structured_llm_planner_sanitizes_bad_model_output_with_unrequested_side_effects():
+    """驗證當 LLM 輸出錯誤的 multi-step (get_current_time + memory_store) 時，Planner 安全過濾並降級為單一 LOCAL."""
+    def bad_model_output(goal: str, caps: CapabilitySummary) -> PlanStructuredOutput:
+        # 模擬不良模型為「我肚子很餓」產出多餘的查時間與存記憶步驟
+        return PlanStructuredOutput(
+            tasks=[
+                PlannedTask(
+                    step_id="step_1",
+                    execution_type=ExecutionType.MCP,
+                    goal="查詢現在時間",
+                    target="get_current_time",
+                ),
+                PlannedTask(
+                    step_id="step_2",
+                    execution_type=ExecutionType.LOCAL,
+                    goal="儲存肚子餓資訊",
+                    target="memory_store",
+                    depends_on=["step_1"],
+                ),
+            ]
+        )
+
+    caps = CapabilitySummary(
+        mcp_tools=[{"name": "get_current_time", "description": "查詢時間"}],
+        local_capabilities=["general_qa", "memory_store"],
+    )
+    backend = MockDeterministicPlanningBackend(handler=bad_model_output)
+    planner = Planner(backend=backend, capability_summary=caps)
+
+    plan = planner.plan("我肚子很餓")
+
+    # 驗證經由 _validate_and_sanitize_tasks 過濾後，自動修正為單一 LOCAL general_qa 任務
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.LOCAL
+    assert plan.tasks[0].target in (None, "general_qa")
+    assert not any(t.target == "memory_store" for t in plan.tasks)
+    assert not any(t.target == "get_current_time" for t in plan.tasks)
+
+
+def test_structured_llm_planner_sanitizes_unrequested_memory_on_a2a_task():
+    """驗證當 LLM 在單純配電腦請求後擅自加上 memory_store 時，Planner 過濾 memory_store 並保留 A2A 任務."""
+    def unrequested_memory_model_output(goal: str, caps: CapabilitySummary) -> PlanStructuredOutput:
+        return PlanStructuredOutput(
+            tasks=[
+                PlannedTask(
+                    step_id="step_1",
+                    execution_type=ExecutionType.A2A,
+                    goal="配電腦",
+                    target="pc_recommendation",
+                ),
+                PlannedTask(
+                    step_id="step_2",
+                    execution_type=ExecutionType.LOCAL,
+                    goal="未經請求自動儲存",
+                    target="memory_store",
+                    depends_on=["step_1"],
+                ),
+            ]
+        )
+
+    caps = CapabilitySummary(
+        a2a_skills=[{"id": "pc_recommendation", "name": "配電腦"}],
+        local_capabilities=["general_qa", "memory_store"],
+    )
+    backend = MockDeterministicPlanningBackend(handler=unrequested_memory_model_output)
+    planner = Planner(backend=backend, capability_summary=caps)
+
+    plan = planner.plan("幫我配一台四萬元遊戲電腦")
+
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].execution_type == ExecutionType.A2A
+    assert plan.tasks[0].target == "pc_recommendation"
+    assert plan.tasks[0].depends_on == []
+
 
 

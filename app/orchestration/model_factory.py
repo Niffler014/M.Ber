@@ -44,6 +44,7 @@ def get_chat_model(
 
     google_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
+    openai_base_url = (os.getenv("OPENAI_BASE_URL") or "").strip() or None
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
 
     # 檢驗金鑰是否為有效值（非範本佔位符號）
@@ -106,12 +107,16 @@ def get_chat_model(
             from langchain_openai import ChatOpenAI
             m_name = custom_model or "gpt-4o-mini"
             logger.info(f"[ModelFactory] Initializing OpenAI model: {m_name}")
-            return ChatOpenAI(
-                model=m_name,
-                api_key=openai_key,
-                temperature=temperature,
-                timeout=timeout,
-            )
+            kwargs: dict[str, Any] = {
+                "model": m_name,
+                "api_key": openai_key,
+                "temperature": temperature,
+                "timeout": timeout,
+            }
+            if openai_base_url:
+                kwargs["base_url"] = openai_base_url
+                logger.info(f"[ModelFactory] Using custom OpenAI base_url: {openai_base_url}")
+            return ChatOpenAI(**kwargs)
         except ImportError:
             logger.warning("[ModelFactory] langchain_openai package not installed.")
         except Exception as e:
